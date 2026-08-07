@@ -10,6 +10,7 @@ export const AvailableOpenAICompatModels = z.enum([
   "deepseek-ai/deepseek-v4-flash",
   "nvidia/nemotron-3-ultra-550b-a55b",
   "inclusionai/ling-3.0-flash:free",
+  "poolside/laguna-s-2.1:free"
 ])
 export type AvailableOpenAICompatModels = z.infer<
   typeof AvailableOpenAICompatModels
