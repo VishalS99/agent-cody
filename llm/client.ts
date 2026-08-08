@@ -3,20 +3,23 @@ import type { KnownApi, OpenAICompatConfig, LLMRequest } from "./types.js"
 import type { Messages, Role } from "../schemas/messages.js"
 import type { ChatCompletionMessageParam } from "openai/resources.js"
 import { logger } from "../config/logger.js"
+import type { APIPromise } from "openai/core/api-promise"
+import type { Stream } from "openai/core/streaming"
 
 // llm/ is the transport layer: it speaks OpenAI ChatCompletion shapes only.
 // It deliberately has no import from agent/ — the agent builds LLMRequest.
 
-export interface LLMClient {
+export interface ILLMClient {
   getClient(): OpenAI
   sendMessage(messages: Messages[]): Promise<OpenAI.ChatCompletion>
   sendRequest(req: LLMRequest): Promise<OpenAI.ChatCompletion>
+  sendSRequest(req: LLMRequest): APIPromise<Stream<OpenAI.ChatCompletionChunk>>
   transformMessages(messages: Messages[]): ChatCompletionMessageParam[]
   transformRequest(req: LLMRequest): ChatCompletionMessageParam[]
   printMessages(messages: Messages[], roles: Role[]): void
 }
 
-export class LLMClient implements LLMClient {
+export class LLMClient implements ILLMClient {
   private client: OpenAI
   private model: string
 
@@ -43,6 +46,20 @@ export class LLMClient implements LLMClient {
     const request: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
       model: this.model,
       messages: transformedMessages,
+    }
+    if (req.tools && req.tools.length > 0) request.tools = req.tools
+    return this.client.chat.completions.create(request)
+  }
+
+  sendSRequest(req: LLMRequest): APIPromise<Stream<OpenAI.ChatCompletionChunk>> {
+    const transformedMessages = this.transformRequest(req)
+    const request: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
+      model: this.model,
+      messages: transformedMessages,
+      stream: true,
+      stream_options: {
+        include_usage: true,
+      }
     }
     if (req.tools && req.tools.length > 0) request.tools = req.tools
     return this.client.chat.completions.create(request)

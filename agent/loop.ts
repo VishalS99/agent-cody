@@ -12,7 +12,7 @@ import { readFileToolDefinition } from "./tools/read_file.js"
 import { grepToolDefinition } from "./tools/grep.js"
 import { createSessionStats, recordToolCall, recordLLMResponse } from "./stats.js"
 
-import type { ChatCompletionMessageFunctionToolCall, ChatCompletion } from "openai/resources.js"
+import type { ChatCompletionMessageFunctionToolCall, ChatCompletionChunk } from "openai/resources.js"
 
 const MAX_TOOL_ITERATIONS = 50
 
@@ -121,7 +121,7 @@ export async function runLoop(): Promise<void> {
 
   while (true) {
     const answer = await rl.question("### Prompt: ")
-    if (answer.trim() === "") {
+    if (answer.trim() === "" || answer.trim() === "exit") {
       logger.info(
         {
           event: "runLoop_exit",
@@ -150,12 +150,45 @@ export async function runLoop(): Promise<void> {
     context.messages.push({ role: "user", content: answer })
 
     let itr = 0
-    let reply = ""
     while (itr++ < MAX_TOOL_ITERATIONS) {
+      let reply = ""
       const startTime = performance.now()
-      let response: ChatCompletion
+      const toolCalls: ChatCompletionMessageFunctionToolCall[] = []
+      let finishReason: ChatCompletionChunk.Choice["finish_reason"] | undefined
+      let usage: ChatCompletionChunk["usage"] | undefined
       try {
-        response = await client.sendRequest(toLLMRequest(context))
+        const stream = await client.sendSRequest(toLLMRequest(context))
+        
+        for await (const chunk of stream) {
+          const delta = chunk.choices[0]?.delta
+          const piece = delta?.content ?? ""
+          if (piece) {
+            reply += piece
+            process.stdout.write(piece)
+          }
+          for (const tc of delta?.tool_calls ?? []) {
+            const existing = toolCalls[tc.index]
+            if (!existing) {
+              toolCalls[tc.index] = {
+                id: tc.id ?? "",
+                type: "function",
+                function: {
+                  name: tc.function?.name ?? "",
+                  arguments: tc.function?.arguments ?? "",
+                },
+              }
+            } else {
+              if (tc.id) existing.id = tc.id
+              if (tc.function?.name) existing.function.name += tc.function.name
+              existing.function.arguments += tc.function?.arguments ?? ""
+            }
+          }
+          if (chunk.choices[0]?.finish_reason) {
+            finishReason = chunk.choices[0].finish_reason
+          }
+          if (chunk.usage) usage = chunk.usage
+        }
+        process.stdout.write("\n")
       } catch (err) {
         const status = (err as any)?.status
         const isRateLimit = status === 429 || status === 503
@@ -171,12 +204,9 @@ export async function runLoop(): Promise<void> {
         break
       }
       const duration = performance.now() - startTime
-      const choice = response.choices[0]
-      const msg = choice?.message
-      reply = msg?.content ?? ""
       stats = recordLLMResponse(stats, {
-        inputTokens: response.usage?.prompt_tokens ?? 0,
-        outputTokens: response.usage?.completion_tokens ?? 0,
+        inputTokens: usage?.prompt_tokens ?? 0,
+        outputTokens: usage?.completion_tokens ?? 0,
         durationMs: Math.round(duration),
         model: config.model,
       })
@@ -186,21 +216,15 @@ export async function runLoop(): Promise<void> {
           model: config.model,
           iteration: itr,
           duration_ms: Math.round(duration),
-          input_tokens: response.usage?.prompt_tokens,
-          output_tokens: response.usage?.completion_tokens,
-          finish_reason: response.choices[0]?.finish_reason,
-          tool_calls: msg?.tool_calls?.length ?? 0,
+          input_tokens: usage?.prompt_tokens,
+          output_tokens: usage?.completion_tokens,
+          finish_reason: finishReason,
+          tool_calls: toolCalls.length,
           reply_chars: reply.length,
         },
         "Model response",
       )
-      const calls = msg?.tool_calls
-      if (
-        !calls ||
-        calls.length === 0 ||
-        choice?.finish_reason !== "tool_calls"
-      ) {
-        process.stdout.write(`\n${reply}\n`)
+      if (toolCalls.length === 0 || finishReason !== "tool_calls") {
         context.messages.push({ role: "assistant", content: reply })
         break
       }
@@ -208,10 +232,10 @@ export async function runLoop(): Promise<void> {
       context.messages.push({
         role: "assistant",
         content: reply,
-        tool_calls: calls,
+        tool_calls: toolCalls,
       })
 
-      for (const call of calls) {
+      for (const call of toolCalls) {
         if (call.type !== "function") continue
         const toolStart = performance.now()
         const result = await dispatchToolCall(context, call)
@@ -236,7 +260,7 @@ export async function runLoop(): Promise<void> {
           { event: "tool_loop_cap_reached", iterations: MAX_TOOL_ITERATIONS },
           "Hit tool-call iteration cap; breaking out",
         )
-        process.stdout.write(`\n${reply}\n`)
+        process.stdout.write("\n")
       }
     }
   }
