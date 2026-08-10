@@ -147,7 +147,9 @@ export class Agent {
         logger.info(
           {
             event: "tool_exec",
-            name: call.function.name,
+            name: `${
+              this.findToolDefinition(call.function.name)?.function.emoji ?? ""
+            } ${call.function.name}`,
             arguments: call.function.arguments,
             duration_ms: Math.round(performance.now() - toolStart),
           },

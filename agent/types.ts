@@ -22,6 +22,7 @@ export interface ToolDefinition<TSchema extends z.ZodType = z.ZodType> {
     name: string
     description: string
     label: string
+    emoji: string
     parameters: TSchema
     execute(toolId: string, params: z.output<TSchema>): Promise<ToolResult>
   }

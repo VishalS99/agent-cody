@@ -3,8 +3,7 @@ import pretty from "pino-pretty"
 
 const isDev = process.env.NODE_ENV !== "production"
 
-// U+1F6E0 — rendered after the level label (e.g. "INFO 🛠️ (ls):")
-const TOOLS_EMOJI = "\u{1F6E0}"
+const TOOLS_EMOJI = "\u{2699}"
 
 // Create a synchronous pretty stream for local development
 const prettyStream = isDev
@@ -16,9 +15,15 @@ const prettyStream = isDev
       colorize: true,
       sync: true, // Forces synchronous writes directly to stdout
       customPrettifiers: {
-        // labelColorized keeps the level color; we only append the emoji
-        level: (_value, _key, _log, { labelColorized }) =>
-          `${labelColorized} ${TOOLS_EMOJI}`,
+        // Tool logs put "<glyph> <toolname>" in `name`; show the glyph after
+        // the level (labelColorized keeps the level color) and fall back to
+        // the generic ⚙ otherwise
+        level: (_value, _key, log, { labelColorized }) => {
+          const emoji = /^\S+\s/.exec((log as { name?: string }).name ?? "")?.[0]?.trim()
+          return `${labelColorized} ${emoji ?? TOOLS_EMOJI}`
+        },
+        // Strip the glyph prefix
+        name: (value) => (value as string).replace(/^\S+\s/, ""),
       },
     })
   : undefined

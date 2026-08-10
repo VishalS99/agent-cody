@@ -121,6 +121,7 @@ export const editFileToolDefinition: ToolDefinition<typeof editFileSchema> = {
     Coordinates are 1-indexed line numbers and UTF-16 code-unit column offsets (matching read_file). Only text files supported;
     binaries and oversized files are rejected.`,
     label: "Edit File",
+    emoji: "\u{1F4DD}\u{FE0E}",
     parameters: editFileSchema,
     /** Validate -> apply -> atomic write-back: file check, read, op/inter-op validation, sorted apply, temp-file rename. */
     execute: async (toolId, params: EditFileSchema): Promise<ToolResult> => {

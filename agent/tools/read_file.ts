@@ -76,6 +76,7 @@ export const readFileToolDefinition: ToolDefinition<typeof fileReadSchema> = {
     description:
       "Read a text file and return content with line numbers. Use when you need to inspect or reference file contents (before editing, or to understand code). Use offset/limit to read large files in chunks.",
     label: "read_file",
+    emoji: "\u{1F5CF}",
     parameters: fileReadSchema,
     execute: async (
       toolId,

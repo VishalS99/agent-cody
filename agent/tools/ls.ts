@@ -34,6 +34,7 @@ export const lsToolDefinition: ToolDefinition<typeof lsSchema> = {
     description:
       "List files and folders (flat) in the given directory, including hidden entries. Does not recurse; call ls again on a subdirectory to descend.",
     label: "ls",
+    emoji: "\u{1F5C1}",
     parameters: lsSchema,
     execute: async (toolId, { path, showHidden }) => {
       const guarded = await resolveInsideRoot(path)

@@ -72,6 +72,7 @@ export const fileToolDefinition: ToolDefinition<typeof fileSchema> = {
     reported in errors. Each path is processed independently — a failure on one path
     does not block the rest.`,
     label: "Files",
+    emoji: "\u{1F4C4}\u{FE0E}",
     parameters: fileSchema,
     execute: async (toolId, params: FileSchema): Promise<ToolResult> => {
       const fn = params.function

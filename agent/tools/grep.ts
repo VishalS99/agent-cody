@@ -119,6 +119,7 @@ export const grepToolDefinition: ToolDefinition<typeof grepSchema> = {
     description:
       "Search files for a regex pattern using in-memory TypeScript scanning. Returns matches with context lines.",
     label: "simple_grep",
+    emoji: "\u{1F50D}\u{FE0E}",
     parameters: grepSchema,
     execute: async (
       toolId,
