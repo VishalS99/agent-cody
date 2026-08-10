@@ -50,6 +50,7 @@ export class Agent {
       let usage: ChatCompletionChunk["usage"] | undefined
       try {
         const stream = await this.client.sendSRequest(this.toLLMRequest())
+        const replyStart = reply.length
         for await (const chunk of stream) {
           const delta = chunk.choices[0]?.delta
           const piece = delta?.content ?? ""
@@ -79,8 +80,7 @@ export class Agent {
           }
           if (chunk.usage) usage = chunk.usage
         }
-        // newline right after the stream
-        hooks?.onDelta?.("\n")
+        if (reply.length > replyStart) hooks?.onDelta?.("\n")
       } catch (err) {
         const status = (err as { status?: number } | undefined)?.status
         const isRateLimit = status === 429 || status === 503
@@ -106,7 +106,7 @@ export class Agent {
         model: this.model,
       })
       hooks?.onUsage?.(this.stats)
-      logger.info(
+      logger.debug(
         {
           event: "model_response",
           model: this.model,
@@ -127,7 +127,7 @@ export class Agent {
 
       this.agentContext.messages.push({
         role: "assistant",
-        content: reply,
+        content: "",
         tool_calls: toolCalls,
       })
 

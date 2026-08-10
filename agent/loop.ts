@@ -48,6 +48,7 @@ export async function runLoop(): Promise<void> {
     }
 
     try {
+      process.stdout.write("> ")
       const _ = await agent.turn(answer, {
         onDelta: (text) => process.stdout.write(text),
       })

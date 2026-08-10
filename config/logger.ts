@@ -3,6 +3,9 @@ import pretty from "pino-pretty"
 
 const isDev = process.env.NODE_ENV !== "production"
 
+// U+1F6E0 — rendered after the level label (e.g. "INFO 🛠️ (ls):")
+const TOOLS_EMOJI = "\u{1F6E0}"
+
 // Create a synchronous pretty stream for local development
 const prettyStream = isDev
   ? pretty({
@@ -12,6 +15,11 @@ const prettyStream = isDev
       singleLine: true,
       colorize: true,
       sync: true, // Forces synchronous writes directly to stdout
+      customPrettifiers: {
+        // labelColorized keeps the level color; we only append the emoji
+        level: (_value, _key, _log, { labelColorized }) =>
+          `${labelColorized} ${TOOLS_EMOJI}`,
+      },
     })
   : undefined
 
