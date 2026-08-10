@@ -1,11 +1,20 @@
 import type { ILLMClient } from "../llm/client.js"
 import type { LLMRequest } from "../llm/types.js"
-import type { AgentContext, ToolDefinition, ToolResult, TurnHooks, TurnSummary } from "./types.js"
+import type {
+  AgentContext,
+  ToolDefinition,
+  ToolResult,
+  TurnHooks,
+  TurnSummary,
+} from "./types.js"
 import type { SessionStats } from "./stats.js"
 import { recordToolCall, recordLLMResponse } from "./stats.js"
 import { toWireTool } from "./util.js"
 import { logger } from "../config/logger.js"
-import type { ChatCompletionMessageFunctionToolCall, ChatCompletionChunk } from "openai/resources.js"
+import type {
+  ChatCompletionMessageFunctionToolCall,
+  ChatCompletionChunk,
+} from "openai/resources.js"
 
 const MAX_TOOL_ITERATIONS = 50
 
@@ -80,7 +89,9 @@ export class Agent {
             error: (err as Error).message,
             iteration: itr,
           },
-          isRateLimit ? "Rate limited, skipping turn" : "LLM request failed, skipping turn",
+          isRateLimit
+            ? "Rate limited, skipping turn"
+            : "LLM request failed, skipping turn",
         )
         throw err
       }
@@ -157,18 +168,26 @@ export class Agent {
 
   toLLMRequest(): LLMRequest {
     const req: LLMRequest = { messages: this.agentContext.messages }
-    if (this.agentContext.system_prompt) req.systemPrompt = this.agentContext.system_prompt
-    if (this.agentContext.available_tools && this.agentContext.available_tools.length > 0) {
+    if (this.agentContext.system_prompt)
+      req.systemPrompt = this.agentContext.system_prompt
+    if (
+      this.agentContext.available_tools &&
+      this.agentContext.available_tools.length > 0
+    ) {
       req.tools = this.agentContext.available_tools.map(toWireTool)
     }
     return req
   }
 
   findToolDefinition(toolName: string): ToolDefinition | undefined {
-    return this.agentContext.available_tools?.find((t) => t.function.name === toolName)
+    return this.agentContext.available_tools?.find(
+      (t) => t.function.name === toolName,
+    )
   }
 
-  async dispatchToolCall(call: ChatCompletionMessageFunctionToolCall): Promise<ToolResult> {
+  async dispatchToolCall(
+    call: ChatCompletionMessageFunctionToolCall,
+  ): Promise<ToolResult> {
     const tool = this.findToolDefinition(call.function.name)
 
     if (!tool) {
@@ -182,7 +201,9 @@ export class Agent {
       })
       return {
         tool_call_id: call.id,
-        content: JSON.stringify({ error: `Tool '${call.function.name}' not found` }),
+        content: JSON.stringify({
+          error: `Tool '${call.function.name}' not found`,
+        }),
         isError: true,
       }
     }

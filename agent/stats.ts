@@ -44,14 +44,20 @@ export function recordToolCall(
     },
     toolFailuresByName: {
       ...stats.toolFailuresByName,
-      [call.name]: (stats.toolFailuresByName[call.name] ?? 0) + (call.isError ? 1 : 0),
+      [call.name]:
+        (stats.toolFailuresByName[call.name] ?? 0) + (call.isError ? 1 : 0),
     },
   }
 }
 
 export function recordLLMResponse(
   stats: SessionStats,
-  resp: { inputTokens: number; outputTokens: number; durationMs: number; model: string },
+  resp: {
+    inputTokens: number
+    outputTokens: number
+    durationMs: number
+    model: string
+  },
 ): SessionStats {
   return {
     ...stats,
@@ -64,7 +70,9 @@ export function recordLLMResponse(
 }
 
 export function toolAverageCallDuration(stats: SessionStats): number {
-  return stats.toolCalls === 0 ? 0 : stats.totalToolCallDuration / stats.toolCalls
+  return stats.toolCalls === 0
+    ? 0
+    : stats.totalToolCallDuration / stats.toolCalls
 }
 
 export function toolCallSuccessRate(stats: SessionStats): number {

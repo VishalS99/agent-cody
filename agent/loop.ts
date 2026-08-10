@@ -9,6 +9,7 @@ import { lsToolDefinition } from "./tools/ls.js"
 import { readFileToolDefinition } from "./tools/read_file.js"
 import { grepToolDefinition } from "./tools/grep.js"
 import { Agent } from "./agent.js"
+import { editFileToolDefinition } from "./tools/edit_file.js"
 import { createSessionStats } from "./stats.js"
 
 export async function runLoop(): Promise<void> {
@@ -19,6 +20,7 @@ export async function runLoop(): Promise<void> {
       lsToolDefinition,
       readFileToolDefinition,
       grepToolDefinition,
+      editFileToolDefinition,
     ],
   }
 
@@ -36,10 +38,7 @@ export async function runLoop(): Promise<void> {
       return
     }
     if (answer.trim() === "" || answer.trim() === "exit") {
-      logger.info(
-        { event: "runLoop_exit", stats: agent.getStats() },
-        "Bye!",
-      )
+      logger.info({ event: "runLoop_exit", stats: agent.getStats() }, "Bye!")
       rl.close()
       return
     }

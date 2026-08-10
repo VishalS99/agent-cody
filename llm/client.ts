@@ -51,7 +51,9 @@ export class LLMClient implements ILLMClient {
     return this.client.chat.completions.create(request)
   }
 
-  sendSRequest(req: LLMRequest): APIPromise<Stream<OpenAI.ChatCompletionChunk>> {
+  sendSRequest(
+    req: LLMRequest,
+  ): APIPromise<Stream<OpenAI.ChatCompletionChunk>> {
     const transformedMessages = this.transformRequest(req)
     const request: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
       model: this.model,
@@ -59,7 +61,7 @@ export class LLMClient implements ILLMClient {
       stream: true,
       stream_options: {
         include_usage: true,
-      }
+      },
     }
     if (req.tools && req.tools.length > 0) request.tools = req.tools
     return this.client.chat.completions.create(request)

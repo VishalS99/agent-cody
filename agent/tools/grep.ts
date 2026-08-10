@@ -35,7 +35,7 @@ export const grepSchema = z.object({
     .describe("Maximum matches to return"),
 })
 export type GrepParams = z.infer<typeof grepSchema>
-export type GrepInput = z.infer<typeof grepSchema>
+
 export interface GrepMatch {
   file: string
   line: number
