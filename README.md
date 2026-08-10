@@ -17,6 +17,7 @@ Agent Cody Banks is a command-line AI agent that helps with software engineering
   - `ls` — List directory contents with hidden file visibility controls
   - `read_file` — Read text files with line offsets, truncation handling, and binary detection
   - `edit_file` — Apply batched atomic edits (edit/insert/delete/replace) to text files; all ops validated before mutation
+  - `files` — Batch create (max 5) or delete (max 2) files; parent dirs created recursively; each path validated against workspace root
   - `simple_grep` — Regex search across files with configurable context lines
 - **File Path Guards**: All file operations validate paths against workspace root (`agent/tools/fs_guard.ts`) to prevent directory traversal via `..` or symlinks
 - **Structured Logging**: JSON logging via Pino with OpenTelemetry-compliant attributes
@@ -42,7 +43,9 @@ agent/ (orchestration layer)
         ├── read_file.ts
         ├── edit_file.ts
         ├── grep.ts
+        ├── file.ts
         └── bash_exec.ts   ← stub
+
 llm/ (transport layer)
     ├── client.ts     — LLMClient: transforms messages to OpenAI API format
     ├── types.ts      — ConfigSchema, OpenAICompatConfig, LLMRequest
@@ -120,7 +123,6 @@ You'll see a prompt: `### Prompt:` — type your query and press Enter.
 5. Run `bun run lint:fix` and `bun run typecheck`
 
 ## Telemetry
-
 All logging is structured JSON via Pino, with OpenTelemetry-compatible fields:
 
 - `service.name`, `service.version`, `environment` — standard OTel resource attributes
@@ -128,9 +130,47 @@ All logging is structured JSON via Pino, with OpenTelemetry-compatible fields:
 - `severityNumber`, `severityText` — OTel log severity mapping
 - `pino-pretty` is used for human-readable dev output
 
-## Roadmap (TODO)
+## Terminal Rendering
 
-- [ ] `writefile` — create/overwrite files
+This project intentionally avoids a full Text User Interface (TUI) library. Instead, it streams text straight to `process.stdout` and uses ANSI escape sequences to overlay rich content interactively. The orchestration lives in `agent/loop.ts`, the details in `config/logger.ts`.
+
+### Streaming and text render
+
+1. **Raw stream**: As the LLM streams tokens, each delta is written to `stdout` immediately via `process.stdout.write(text)` (`agent/loop.ts`). This gives the user a latency-free view.
+2. **Segmentation**: The stream is split on newlines into segments, so each text block can later be rendered as Markdown separately (`loop.ts`).
+3. **Markdown rendering with `Bun.markdown.ansi`**: Once the model turn completes, each segment text is passed through `Bun.markdown.ansi(seg)`, which converts GitHub-flavored Markdown into colored ANSI output directly in the terminal without any external TUI library.
+4. **Tool-call annotations**: If any tools ran between two text segments (tracked via a boundary ledger), an interpolated `[tools were called]` line is inserted under the rendered Markdown block.
+
+### The log ledger and redraw trick
+
+Logs (“pino-pretty” structured, colorful json lines) and the streamed answer share `stdout`. With no TUI double-buffering, the loop needs to reconcile them visually:
+
+- **`logLedger`** (`config/logger.ts`): every chunk written by the pino-pretty stream is appended here as `{lines: number, text: string}` lines. Lines are computed by `visualLines(text)`, which strips ANSI SGR codes and divides visible width by terminal column count to get the true row footprint.
+- **Redraw sequence** (`agent/loop.ts`): after the turn completes:
+  1. Calculate how far up the cursor needs to move (block lines from ledger + visual lines of streamed text).
+  2. Emit `\x1b[<n>A` (cursor up) + `\x1b[J` (clear to end of screen).
+  3. Reprint the `>` prompt marker, followed by each ledger entry (tool logs).
+  4. Reprint the streamed text, but now rendered through `Bun.markdown.ansi`, with tool-call annotations in between.
+- **Safety**: if the computed jump exceeds the terminal height (`process.stdout.rows ?? 24`), the redraw is skipped and output just advances normally.
+
+### Rendering flow summary
+
+```mermaid
+flowchart TD
+  A[LLM streams tokens] -->|onDelta| B[stdout.write raw text]
+  B --> C[Split stream into segments]
+  C --> D[Agent runs tools]
+  D --> E[Turn complete]
+  E --> F[Cursor up + clear ANSI]
+  F --> G[Replay log ledger entries]
+  G --> H[Bun.markdown.ansi per segment]
+  H --> I[Insert tool-called annotations]
+  I --> J[Final rendered output]
+```
+
+
+- [x] `files` — batch create/delete files (max 5 / 2); each path validated against the workspace root
+- [ ] `writefile` — create/overwrite files with contents (not just empty)
 - [x] `edit_file` — modify files in-place with batched atomic edits (edit/insert/delete/replace)
 - [ ] `filediff` — visual diffs between file versions
 - [ ] `bash_exec` — shell command execution (validation/sandbox TBD)

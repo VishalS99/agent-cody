@@ -119,7 +119,7 @@ export const editFileToolDefinition: ToolDefinition<typeof editFileSchema> = {
     "XY def"; text:"" deletes just the span; end:-1 means "to the end of the line". Never replace a whole line via 'edit' by
     computing its length — use 'delete' or 'replace' instead. 'insert' adds text at a column (may contain newlines).
     Coordinates are 1-indexed line numbers and UTF-16 code-unit column offsets (matching read_file). Only text files supported;
-    binaries and oversized files are rejected.`,
+    binaries and oversized files are rejected. After applying edits, verify the file is in a workable state with no errors (e.g., run lint/typecheck); if errors exist, call further edits to fix them.`,
     label: "Edit File",
     emoji: "\u{1F4DD}\u{FE0E}",
     parameters: editFileSchema,
@@ -323,7 +323,6 @@ function validateInterOps(ops: EditFileOpSchema[]): OpsFailure | null {
   return opsValFailure
 }
 
-/** Resolves the sentinel end:-1 to "past end of any line" for overlap comparisons. */
 function effectiveEditEnd(end: number): number {
   return end === -1 ? Number.MAX_SAFE_INTEGER : end
 }

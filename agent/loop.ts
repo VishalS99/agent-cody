@@ -36,7 +36,7 @@ export async function runLoop(): Promise<void> {
   while (true) {
     let answer: string
     try {
-      answer = await rl.question("### Prompt: ")
+      answer = await rl.question("\n\x1b[1m\x1b[94m\x1b[100m cody> \x1b[0m ")
     } catch {
       rl.close()
       return

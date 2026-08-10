@@ -51,7 +51,7 @@ const prettyStream = isDev
           const emoji = /^\S+\s/
             .exec((log as { name?: string }).name ?? "")?.[0]
             ?.trim()
-          return `${labelColorized} ${emoji ?? TOOLS_EMOJI}  `
+          return `${labelColorized}  ${emoji ?? TOOLS_EMOJI}`
         },
         // Strip the glyph prefix
         name: (value) => (value as string).replace(/^\S+\s/, ""),
