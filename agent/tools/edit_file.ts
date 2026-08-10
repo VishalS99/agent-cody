@@ -2,9 +2,10 @@
  * edit_file — batched, atomic, in-place edits to an existing text file.
  *
  * Ops (each carries only its own fields):
- *   edit:   { lineNo, start, end, text } — replace [start,end) columns with text; empty text deletes the span (partial-line delete)
- *   insert: { lineNo, start, text }      — insert text at column start (text may contain "\n")
- *   delete: { lineNo, count = 1 }        — remove `count` whole lines (complete-line deletes only)
+ *   edit:    { lineNo, start, end, text } — replace [start,end) columns with text; empty text deletes the span; end:-1 = rest of line
+ *   insert:  { lineNo, start, text }      — insert text at column start (text may contain "\n")
+ *   delete:  { lineNo, count = 1 }        — remove `count` whole lines (complete-line deletes only)
+ *   replace: { lineNo, count = 1, text }  — replace `count` whole lines with text (swap a line block)
  *
  * Indexing: lineNo 1-indexed, start/end UTF-16 code units — matches read_file (no phantom
  * trailing line; "\r\n" stripped). All ops target ORIGINAL-file coordinates.
@@ -34,11 +35,11 @@ export const editFileOpSchema = z.discriminatedUnion("function", [
     end: z
       .number()
       .int()
-      .min(0)
-      .describe("End column (0-based, EXCLUSIVE); the [start,end) span is replaced — end = line length replaces the rest of the line"),
+      .min(-1)
+      .describe("End column (0-based, EXCLUSIVE); the [start,end) span is replaced; -1 means 'rest of the line' (no length math needed)"),
     text: z
       .string()
-      .describe("Replacement text; may contain newlines to expand into multiple lines; use the 'delete' op for whole-line removal, or empty text (\"\") to delete just the [start,end) span"),
+      .describe("Replacement text; may contain newlines to expand into multiple lines; use the 'delete' or 'replace' op for whole-line changes, or empty text (\"\") to delete just the [start,end) span"),
   }),
   z.object({
     function: z.literal("insert").describe("Op kind: insert — inserts text at a column on one line"),
@@ -61,6 +62,14 @@ export const editFileOpSchema = z.discriminatedUnion("function", [
     lineNo: z.number().int().min(1).describe("1-indexed first line to delete"),
     count: z.number().int().min(1).default(1).describe("Number of lines to delete (default 1)"),
   }),
+  z.object({
+    function: z.literal("replace").describe("Op kind: replace — swaps a whole-line block for new text in one op"),
+    lineNo: z.number().int().min(1).describe("1-indexed first line to replace"),
+    count: z.number().int().min(1).default(1).describe("Number of lines to replace (default 1)"),
+    text: z
+      .string()
+      .describe("Replacement text; may contain newlines; replaces the `count` lines starting at lineNo"),
+  }),
 ])
 
 export const editFileSchema = z.object({
@@ -79,7 +88,7 @@ export const editFileResultSchema = z.object({
     .array(
       z.object({
         index: z.number().int().min(0).describe("0-based index into the input ops array (correlation key)"),
-        function: z.enum(["edit", "insert", "delete"]).describe("Echo of the op kind"),
+        function: z.enum(["edit", "insert", "delete", "replace"]).describe("Echo of the op kind"),
         error: z.string().optional().describe("Present only on the single op that failed; the failure reason"),
       }),
     )
@@ -92,7 +101,7 @@ export type EditFileOpSchema = z.infer<typeof editFileOpSchema>
 export type EditFileResultSchema = z.infer<typeof editFileResultSchema>
 interface OpsFailure {
   index: number
-  function: "edit" | "insert" | "delete"
+  function: "edit" | "insert" | "delete" | "replace"
   error: string
 }
 
@@ -102,11 +111,13 @@ export const editFileToolDefinition: ToolDefinition<typeof editFileSchema> = {
   type: "function",
   function: {
     name: "edit_file",
-    description: `Apply a batched sequence of atomic edits (edit/insert/delete) to an existing text file. All ops are validated
-    before any mutation — on any failure the file is untouched. 'delete' removes whole lines — use it for ANY complete-line change
-    (complete line deletes are ONLY via 'delete'). 'edit' replaces ONLY the [start,end) column span (end EXCLUSIVE): e.g. "abc def"
-    with edit {lineNo:1, start:0, end:3, text:"XY"} yields "XY def"; start:0, end:<line length> replaces the whole line; empty
-    text (text:"") deletes just the span (partial-line deletes). 'insert' adds text at a column (may contain newlines).
+    description: `Apply a batched sequence of atomic edits (edit/insert/delete/replace) to an existing text file. All ops are
+    validated before any mutation — on any failure the file is untouched. 'delete' removes whole lines — use it for ANY
+    whole-line change. 'replace' swaps a whole-line block for new text in one op: {lineNo, count, text} removes 'count' lines
+    starting at lineNo and inserts text in their place — use it to rewrite a range of lines. 'edit' replaces ONLY the
+    [start,end) column span on one line (end EXCLUSIVE): e.g. "abc def" with edit {lineNo:1, start:0, end:3, text:"XY"} yields
+    "XY def"; text:"" deletes just the span; end:-1 means "to the end of the line". Never replace a whole line via 'edit' by
+    computing its length — use 'delete' or 'replace' instead. 'insert' adds text at a column (may contain newlines).
     Coordinates are 1-indexed line numbers and UTF-16 code-unit column offsets (matching read_file). Only text files supported;
     binaries and oversized files are rejected.`,
     label: "Edit File",
@@ -220,11 +231,17 @@ export const editFileToolDefinition: ToolDefinition<typeof editFileSchema> = {
             lines.splice(lineNo - 1, count)
             break
           }
+          case "replace": {
+            const { lineNo, count, text } = op
+            lines.splice(lineNo - 1, count, ...text.split("\n"))
+            break
+          }
           case "edit": {
             const { lineNo, start, end, text } = op
             const textArr = text.split("\n")
             const targetLine: string | undefined = lines[lineNo - 1]
-            const suffix = targetLine ? targetLine.slice(end) : ""
+            const resolvedEnd = end === -1 ? targetLine?.length ?? 0 : end
+            const suffix = targetLine ? targetLine.slice(resolvedEnd) : ""
             const prefix = targetLine ? targetLine.slice(0, start) : ""
             const m = textArr.length
             const replacement: string[] = m === 1
@@ -267,7 +284,7 @@ export const editFileToolDefinition: ToolDefinition<typeof editFileSchema> = {
 }
 
 /**
- * Rejects overlapping ops: delete vs any op in its range, same-line range overlaps,
+ * Rejects overlapping ops: delete/replace vs any op in its range, same-line range overlaps,
  * and duplicate same-point inserts.
  */
 function validateInterOps(ops: EditFileOpSchema[]): OpsFailure | null {
@@ -276,24 +293,24 @@ function validateInterOps(ops: EditFileOpSchema[]): OpsFailure | null {
     const opsA = ops[i]!
     for (let j = i + 1; j < ops.length; j++) {
       const opsB = ops[j]!
-      if (opsA.function === "delete" && opsB.lineNo >= opsA.lineNo && opsB.lineNo <= opsA.lineNo + opsA.count - 1){
-        opsValFailure = { index: j, function: opsB.function, error: `op ${j} (${opsB.function} on line ${opsB.lineNo}) conflicts with op ${i} (delete of lines ${opsA.lineNo}-${opsA.lineNo + opsA.count - 1}) — move one op to a different line` }
+      if ((opsA.function === "delete" || opsA.function === "replace") && opsB.lineNo >= opsA.lineNo && opsB.lineNo <= opsA.lineNo + opsA.count - 1){
+        opsValFailure = { index: j, function: opsB.function, error: `op ${j} (${opsB.function} on line ${opsB.lineNo}) conflicts with op ${i} (${opsA.function} of lines ${opsA.lineNo}-${opsA.lineNo + opsA.count - 1}) — move one op to a different line` }
         break
       }
-      if (opsB.function === "delete" && opsA.lineNo >= opsB.lineNo && opsA.lineNo <= opsB.lineNo + opsB.count - 1) {
-        opsValFailure = { index: i, function: opsA.function, error: `op ${i} (${opsA.function} on line ${opsA.lineNo}) conflicts with op ${j} (delete of lines ${opsB.lineNo}-${opsB.lineNo + opsB.count - 1}) — move one op to a different line` }
+      if ((opsB.function === "delete" || opsB.function === "replace") && opsA.lineNo >= opsB.lineNo && opsA.lineNo <= opsB.lineNo + opsB.count - 1) {
+        opsValFailure = { index: i, function: opsA.function, error: `op ${i} (${opsA.function} on line ${opsA.lineNo}) conflicts with op ${j} (${opsB.function} of lines ${opsB.lineNo}-${opsB.lineNo + opsB.count - 1}) — move one op to a different line` }
         break
       }
-      if (opsA.function === "edit" && opsB.function === "edit" && opsA.lineNo === opsB.lineNo && opsA.start < opsB.end && opsB.start < opsA.end) {
-        opsValFailure = { index: i, function: "edit", error: `op ${i} edit [${opsA.start}, ${opsA.end}) overlaps op ${j} edit [${opsB.start}, ${opsB.end}) on line ${opsA.lineNo} — adjust one range` }
+      if (opsA.function === "edit" && opsB.function === "edit" && opsA.lineNo === opsB.lineNo && opsA.start < effectiveEditEnd(opsB.end) && effectiveEditEnd(opsA.end) > opsB.start) {
+        opsValFailure = { index: i, function: "edit", error: `op ${i} edit [${opsA.start}, ${effectiveEditEnd(opsA.end)}) overlaps op ${j} edit [${opsB.start}, ${effectiveEditEnd(opsB.end)}) on line ${opsA.lineNo} — adjust one range` }
         break
       }
-      if (opsA.function === "edit" && opsB.function === "insert" && opsA.lineNo === opsB.lineNo && opsA.start <= opsB.start && opsB.start < opsA.end) {
-        opsValFailure = { index: i, function: "edit", error: `op ${j} insert at col ${opsB.start} lands inside op ${i} edit [${opsA.start}, ${opsA.end}) on line ${opsA.lineNo} — move the insert or shrink the edit range` }
+      if (opsA.function === "edit" && opsB.function === "insert" && opsA.lineNo === opsB.lineNo && opsA.start <= opsB.start && opsB.start < effectiveEditEnd(opsA.end)) {
+        opsValFailure = { index: i, function: "edit", error: `op ${j} insert at col ${opsB.start} lands inside op ${i} edit [${opsA.start}, ${effectiveEditEnd(opsA.end)}) on line ${opsA.lineNo} — move the insert or shrink the edit range` }
         break
       }
-      if (opsA.function === "insert" && opsB.function === "edit" && opsA.lineNo === opsB.lineNo && opsB.start <= opsA.start && opsA.start < opsB.end) {
-        opsValFailure = { index: i, function: "insert", error: `op ${i} insert at col ${opsA.start} lands inside op ${j} edit [${opsB.start}, ${opsB.end}) on line ${opsA.lineNo} — move the insert or shrink the edit range` }
+      if (opsA.function === "insert" && opsB.function === "edit" && opsA.lineNo === opsB.lineNo && opsB.start <= opsA.start && opsA.start < effectiveEditEnd(opsB.end)) {
+        opsValFailure = { index: i, function: "insert", error: `op ${i} insert at col ${opsA.start} lands inside op ${j} edit [${opsB.start}, ${effectiveEditEnd(opsB.end)}) on line ${opsA.lineNo} — move the insert or shrink the edit range` }
         break
       }
       if (opsA.function === "insert" && opsB.function === "insert" && opsA.lineNo === opsB.lineNo && opsA.start === opsB.start) {
@@ -303,6 +320,11 @@ function validateInterOps(ops: EditFileOpSchema[]): OpsFailure | null {
     }
   }
   return opsValFailure
+}
+
+/** Resolves the sentinel end:-1 to "past end of any line" for overlap comparisons. */
+function effectiveEditEnd(end: number): number {
+  return end === -1 ? Number.MAX_SAFE_INTEGER : end
 }
 
 /** Validates one op against the original lines: bounds, ordering, and surrogate-boundary checks. */
@@ -320,15 +342,16 @@ function validateOps(op: EditFileOpSchema, opIndx: number, lines: string[]): Ops
         break
       }
       const targetLine = lines[lineNo - 1]!
+      const resolvedEnd = end === -1 ? targetLine.length : end
       if (start > targetLine.length) {
         failure.error = `start ${start} out of range for line ${lineNo} (length ${targetLine.length}): "${linePreview(targetLine)}"`
         break
       }
-      if (end > targetLine.length) {
+      if (resolvedEnd > targetLine.length) {
         failure.error = `end ${end} out of range for line ${lineNo} (length ${targetLine.length}): "${linePreview(targetLine)}"`
         break
       }
-      if (start > end) {
+      if (start > resolvedEnd) {
         failure.error = `start ${start} must be less than or equal to end ${end}`
         break
       }
@@ -336,7 +359,7 @@ function validateOps(op: EditFileOpSchema, opIndx: number, lines: string[]): Ops
         failure.error = `start ${start} on line ${lineNo} splits a surrogate pair (emoji); move left or right by 1`
         break
       }
-      if (isLowSurrogate(targetLine, end)) {
+      if (isLowSurrogate(targetLine, resolvedEnd)) {
         failure.error = `end ${end} on line ${lineNo} splits a surrogate pair (emoji); move left or right by 1`
         break
       }
@@ -366,14 +389,16 @@ function validateOps(op: EditFileOpSchema, opIndx: number, lines: string[]): Ops
       }
       break
     }
-    case "delete": {
+    case "delete":
+    case "replace": {
       const { lineNo, count } = op
+      const fn = op.function
       if (lineNo > lines.length) {
         failure.error = `line ${lineNo} out of range (file has ${lines.length} lines)`
         break
       }
       if (lineNo + count - 1 > lines.length) {
-        failure.error = `delete range [${lineNo}, ${lineNo + count - 1}] exceeds file length (${lines.length} lines)`
+        failure.error = `${fn} range [${lineNo}, ${lineNo + count - 1}] exceeds file length (${lines.length} lines)`
         break
       }
       break
