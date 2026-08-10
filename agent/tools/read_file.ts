@@ -4,7 +4,7 @@ import * as fsProm from "node:fs/promises"
 import readline from "node:readline"
 import * as fs from "node:fs"
 import { logger } from "../../config/logger.js"
-import * as nodePath from "node:path"
+import { resolveInsideRoot } from "./fs_guard.js"
 
 const MAX_LINES = 1000
 const MAX_BYTES = 1_000_000
@@ -81,7 +81,15 @@ export const readFileToolDefinition: ToolDefinition<typeof fileReadSchema> = {
       toolId,
       { path, offset = 1, limit },
     ): Promise<ToolResult> => {
-      const resolvedPath = nodePath.resolve(path)
+      const guarded = await resolveInsideRoot(path)
+      if (!guarded.ok) {
+        return {
+          tool_call_id: toolId,
+          content: JSON.stringify({ error: guarded.error, path }),
+          isError: true,
+        }
+      }
+      const resolvedPath = guarded.path
       try {
         const stat = await fsProm.stat(resolvedPath)
         if (stat.size > MAX_BYTES) {

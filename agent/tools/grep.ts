@@ -4,6 +4,7 @@ import { logger } from "../../config/logger.js"
 import * as nodePath from "node:path"
 import * as fs from "node:fs/promises"
 import * as fastGlob from "fast-glob"
+import { resolveInsideRoot } from "./fs_guard.js"
 
 export const grepSchema = z.object({
   pattern: z.string().describe("Regex pattern to search for"),
@@ -123,7 +124,15 @@ export const grepToolDefinition: ToolDefinition<typeof grepSchema> = {
       toolId,
       { pattern, path, include, caseInsensitive, contextLines, maxResults },
     ) => {
-      const cwd = path ? nodePath.resolve(path) : process.cwd()
+      const guarded = await resolveInsideRoot(path ?? ".")
+      if (!guarded.ok) {
+        return {
+          tool_call_id: toolId,
+          content: JSON.stringify({ error: guarded.error, pattern }),
+          isError: true,
+        }
+      }
+      const cwd = guarded.path
       const flags = caseInsensitive ? "gi" : "g"
       let regex: RegExp
       try {

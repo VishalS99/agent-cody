@@ -1,4 +1,4 @@
-import { SYSTEM_PROMPT } from "./prompt.js"
+import { buildSystemPrompt } from "./prompt.js"
 import type { AgentContext } from "./types.js"
 import * as readline from "node:readline/promises"
 import { stdin as input, stdout as output } from "node:process"
@@ -11,10 +11,12 @@ import { grepToolDefinition } from "./tools/grep.js"
 import { Agent } from "./agent.js"
 import { editFileToolDefinition } from "./tools/edit_file.js"
 import { createSessionStats } from "./stats.js"
+import { allowedRoot } from "./tools/fs_guard.js"
 
 export async function runLoop(): Promise<void> {
+  const root = await allowedRoot()
   const context: AgentContext = {
-    system_prompt: SYSTEM_PROMPT,
+    system_prompt: buildSystemPrompt(root),
     messages: [],
     available_tools: [
       lsToolDefinition,

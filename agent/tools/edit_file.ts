@@ -19,8 +19,8 @@
  */
 import * as z from "zod"
 import type { ToolDefinition, ToolResult } from "../types.js"
-import * as nodePath from "node:path"
 import * as fsProm from "node:fs/promises"
+import { resolveInsideRoot } from "./fs_guard.js"
 
 export const editFileOpSchema = z.discriminatedUnion("function", [
   z.object({
@@ -115,10 +115,20 @@ export const editFileToolDefinition: ToolDefinition<typeof editFileSchema> = {
     execute: async (toolId, params: EditFileSchema): Promise<ToolResult> => {
       const { path, ops } = params
 
+      const guarded = await resolveInsideRoot(path)
+      if (!guarded.ok) {
+        return {
+          tool_call_id: toolId,
+          content: JSON.stringify({ path, error: guarded.error }),
+          isError: true,
+        }
+      }
+      const resolvedPath = guarded.path
+
       if (ops.length === 0) {
         return {
           tool_call_id: toolId,
-          content: JSON.stringify({ path: nodePath.resolve(path), edits: [] }),
+          content: JSON.stringify({ path: resolvedPath, edits: [] }),
           isError: false,
         }
       }
@@ -126,7 +136,7 @@ export const editFileToolDefinition: ToolDefinition<typeof editFileSchema> = {
         return {
           tool_call_id: toolId,
           content: JSON.stringify({
-            path: nodePath.resolve(path),
+            path: resolvedPath,
             error: `too many ops (${ops.length}); max ${MAX_OPS}`,
           }),
           isError: true,
@@ -134,7 +144,6 @@ export const editFileToolDefinition: ToolDefinition<typeof editFileSchema> = {
       }
 
       // file level validation
-      const resolvedPath = nodePath.resolve(path)
       const { isErr, error } = await editFileValidation(resolvedPath)
       if (isErr) {
         return {
@@ -378,6 +387,11 @@ function isLowSurrogate(line: string, col: number): boolean {
   // a cut splits an emoji pair iff col lands on the trailing (low) surrogate; a high surrogate is a valid boundary
   const code = line.charCodeAt(col) // 16-bit code unit at that slot
   return code >= 0xdc00 && code <= 0xdfff
+}
+
+/** Truncated line content for error messages, so the model can recount columns without a re-read. */
+function linePreview(line: string, max = 80): string {
+  return line.length <= max ? line : line.slice(0, max) + "…"
 }
 
 
