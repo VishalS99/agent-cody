@@ -79,6 +79,8 @@ export class Agent {
           }
           if (chunk.usage) usage = chunk.usage
         }
+        // newline right after the stream
+        hooks?.onDelta?.("\n")
       } catch (err) {
         const status = (err as { status?: number } | undefined)?.status
         const isRateLimit = status === 429 || status === 503

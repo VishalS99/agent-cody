@@ -10,6 +10,7 @@ import { readFileToolDefinition } from "./tools/read_file.js"
 import { grepToolDefinition } from "./tools/grep.js"
 import { Agent } from "./agent.js"
 import { editFileToolDefinition } from "./tools/edit_file.js"
+import { fileToolDefinition } from "./tools/file.js"
 import { createSessionStats } from "./stats.js"
 import { allowedRoot } from "./tools/fs_guard.js"
 
@@ -23,6 +24,7 @@ export async function runLoop(): Promise<void> {
       readFileToolDefinition,
       grepToolDefinition,
       editFileToolDefinition,
+      fileToolDefinition,
     ],
   }
 
