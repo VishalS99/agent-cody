@@ -18,6 +18,7 @@ Agent Cody Banks is a command-line AI agent that helps with software engineering
   - `read_file` — Read text files with line offsets, truncation handling, and binary detection
   - `edit_file` — Apply batched atomic edits (edit/insert/delete) to text files; all ops validated before mutation
   - `simple_grep` — Regex search across files with configurable context lines
+- **File Path Guards**: All file operations validate paths against workspace root (`agent/tools/fs_guard.ts`) to prevent directory traversal via `..` or symlinks
 - **Structured Logging**: JSON logging via Pino with OpenTelemetry-compliant attributes
 - **Session Statistics**: Real-time tracking of tool calls, success/failure rates, token usage, and latency
 - **Rate Limit Handling**: Graceful degradation on 429/503 responses
