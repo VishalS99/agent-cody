@@ -76,12 +76,12 @@ bun install
 
 ### Configuration
 
-Set the following environment variables:
+Set the following environment variables (copy `.env.example` to `.env` and fill in your credential):
 
 ```bash
-export NVIDIA_API_KEY=your_api_key_here
-export NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
-export NVIDIA_MODEL=z-ai/glm-5.2
+export API_KEY=your_api_key_here
+export BASE_URL=https://integrate.api.nvidia.com/v1
+export MODEL=z-ai/glm-5.2
 ```
 
 ### Running

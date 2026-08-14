@@ -13,9 +13,12 @@ import { editFileToolDefinition } from "./tools/edit_file.js"
 import { fileToolDefinition } from "./tools/file.js"
 import { createSessionStats } from "./stats.js"
 import { allowedRoot } from "./tools/fs_guard.js"
+import { goalsToolDefinition } from "./tools/context/goals.js"
 
-export async function runLoop(): Promise<void> {
+
+async function buildAgentContext(): Promise<AgentContext> {
   const root = await allowedRoot()
+
   const context: AgentContext = {
     system_prompt: buildSystemPrompt(root),
     messages: [],
@@ -25,9 +28,19 @@ export async function runLoop(): Promise<void> {
       grepToolDefinition,
       editFileToolDefinition,
       fileToolDefinition,
+      goalsToolDefinition
     ],
+    tool_actions_taken: [],
   }
 
+  // goals, action steps, state are initialized when a task is assigned and the agent calls
+  // tools to initialize them
+  return context
+
+}
+
+export async function runLoop(): Promise<void> {
+  const context = await buildAgentContext()
   const client = new LLMClient("openai-completions", config)
   const agent = new Agent(client, context, createSessionStats(), config.model)
 
