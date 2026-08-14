@@ -11,17 +11,19 @@ export const AvailableOpenAICompatModels = z.enum([
   "nvidia/nemotron-3-ultra-550b-a55b",
   "inclusionai/ling-3.0-flash:free",
   "poolside/laguna-s-2.1:free",
+  "gpt-5.6-luna"
 ])
 export type AvailableOpenAICompatModels = z.infer<
   typeof AvailableOpenAICompatModels
 >
 export const DefaultOpenAICompatTimeout = 30_000
-export const DefaultOpenAICompatModel = "z-ai/glm-5.2"
+export const DefaultOpenAICompatModel = "gpt-5.6-luna"
 export const DefaultMaxRetries = 3
 
 export const ConfigSchema = z.object({
   model: AvailableOpenAICompatModels.default(DefaultOpenAICompatModel),
-  baseURL: z.string().default("https://integrate.api.nvidia.com/v1"),
+  baseURL: z.string().default("https://api.openai.com/v1"),
+  reasoningEffort: z.enum(["none", "low", "medium", "high"]).default("none"),
   apiKey: z.string().min(1),
   timeout: z.number().default(DefaultOpenAICompatTimeout),
   maxRetries: z.number().default(DefaultMaxRetries),

@@ -8,12 +8,42 @@ export interface AgentContext {
   system_prompt: string
   messages: Messages[]
   available_tools?: ToolDefinition<z.ZodType>[]
+  tool_actions_taken?: ToolResult[]
+  action_steps?: ActionStep[]
+  goal?: string
+  state?: ContextState
 }
+
+export interface ContextState {
+  notes: string[]
+  decisions: string[]
+  current_step: number
+  files_read: string[]
+}
+
+export interface ActionStep {
+  action: string
+  status: "pending" | "current" | "completed"
+}
+
+export type ContextUpdate =
+  | {
+      type: "set_goal"
+      goal: string
+      steps: string[]
+    }
+  | {
+      type: "update_state"
+      notes?: string
+      decision?: string
+      step_completed?: number
+    }
 
 export interface ToolResult {
   tool_call_id: string
   content: string
   isError?: boolean
+  contextUpdate?: ContextUpdate
 }
 
 export interface ToolDefinition<TSchema extends z.ZodType = z.ZodType> {

@@ -22,10 +22,12 @@ export interface ILLMClient {
 export class LLMClient implements ILLMClient {
   private client: OpenAI
   private model: string
+  private reasoningEffort: "none" | "low" | "medium" | "high" = "none"
 
   constructor(api: KnownApi, config: OpenAICompatConfig) {
     this.client = createClient(api, config)
     this.model = config.model
+    if (config.reasoningEffort) this.reasoningEffort = config.reasoningEffort
   }
 
   getClient(): OpenAI {
@@ -46,6 +48,7 @@ export class LLMClient implements ILLMClient {
     const request: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
       model: this.model,
       messages: transformedMessages,
+      reasoning_effort: this.reasoningEffort,
     }
     if (req.tools && req.tools.length > 0) request.tools = req.tools
     return this.client.chat.completions.create(request)
@@ -58,6 +61,7 @@ export class LLMClient implements ILLMClient {
     const request: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
       model: this.model,
       messages: transformedMessages,
+      reasoning_effort: this.reasoningEffort,
       stream: true,
       stream_options: {
         include_usage: true,

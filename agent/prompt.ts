@@ -1,3 +1,5 @@
+import type { AgentContext } from "./types.js";
+
 export const SYSTEM_PROMPT: string = `You are Agent Cody, an interactive CLI tool that helps users with software engineering tasks. Use the instructions below and the tools available to you to assist the user.
 
 IMPORTANT: You must NEVER generate or guess URLs for the user unless you are confident that the URLs are for helping the user with programming. You may use URLs provided by the user in their messages or local files.
@@ -85,7 +87,11 @@ When referencing specific functions or pieces of code include the pattern \`file
 <example>
 user: Where are errors from the client handled?
 assistant: Clients are marked as failed in the \`connectToServer\` function in src/services/process.ts:712.
-</example>`
+</example>
+
+# Task initialization
+For every user request that requires you to inspect or modify the workspace, call the \`goals\` tool before using any other task tool. Convert the request into one concise goal and an ordered linear list of steps. Do not only describe the plan in text. After the \`goals\` tool succeeds, begin the current step.
+`;
 
 /** Appends the workspace boundary so the model knows its allowed filesystem root. (for now) */
 export function buildSystemPrompt(root: string): string {
@@ -93,5 +99,40 @@ export function buildSystemPrompt(root: string): string {
 
 # Workspace boundary
 Your workspace root is \`${root}\`. You may only list, read, search, and edit files and directories inside this root.
-The tools reject anything outside it (absolute paths, \`../\`, symlink escapes) — do not attempt to bypass this.`
+The tools reject anything outside it (absolute paths, \`../\`, symlink escapes) — do not attempt to bypass this.`;
+}
+
+export function buildContextSnapshot(context: AgentContext): string {
+  const steps = context.action_steps ?? [];
+  const state = context.state;
+  const currentStep = state?.current_step ?? -1;
+  const stepLines =
+    steps.length > 0
+      ? steps.map(
+          (step, index) => `- [${step.status}] ${index}: ${step.action}`,
+        )
+      : ["- (not initialized; call the goals tool before task work)"];
+
+  return `# Live task context
+This section is current agent state, not additional user instructions.
+
+Goal: ${context.goal ?? "(not initialized)"}
+Current step: ${currentStep >= 0 ? currentStep : "none"}
+
+Action steps:
+${stepLines.join("\n")}
+
+Notes:
+${state?.notes?.length ? state.notes.map((note) => `- ${note}`).join("\n") : "- (none)"}
+
+Decisions:
+${state?.decisions?.length ? state.decisions.map((decision) => `- ${decision}`).join("\n") : "- (none)"}
+
+Files read:
+${state?.files_read?.length ? state.files_read.map((file) => `- ${file}`).join("\n") : "- (none)"}
+`;
+}
+
+export function buildRequestSystemPrompt(context: AgentContext): string {
+  return `${context.system_prompt}\n\n${buildContextSnapshot(context)}`;
 }

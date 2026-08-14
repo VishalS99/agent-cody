@@ -10,6 +10,8 @@ import type {
 import type { SessionStats } from "./stats.js"
 import { recordToolCall, recordLLMResponse } from "./stats.js"
 import { toWireTool } from "./util.js"
+import { applyContextUpdate } from "./tools/context/manager.js"
+import { buildRequestSystemPrompt } from "./prompt.js"
 import { logger } from "../config/logger.js"
 import type {
   ChatCompletionMessageFunctionToolCall,
@@ -172,8 +174,10 @@ export class Agent {
 
   toLLMRequest(): LLMRequest {
     const req: LLMRequest = { messages: this.agentContext.messages }
-    if (this.agentContext.system_prompt)
-      req.systemPrompt = this.agentContext.system_prompt
+
+    if (this.agentContext.system_prompt) {
+      req.systemPrompt = buildRequestSystemPrompt(this.agentContext)
+    }
     if (
       this.agentContext.available_tools &&
       this.agentContext.available_tools.length > 0
@@ -248,10 +252,25 @@ export class Agent {
         isError: true,
       }
     }
+    if (!result.isError && result.contextUpdate) {
+      try {
+        applyContextUpdate(this.agentContext, result.contextUpdate)
+      } catch (err) {
+        result = {
+          ...result,
+          content: JSON.stringify({
+            error: `Context update error: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          }),
+          isError: true,
+        }
+      }
+    }
 
     this.agentContext.messages.push({
       role: "tool",
-      content: result.content,
+      content: JSON.stringify({...JSON.parse(result.content), ...result.contextUpdate}),
       tool_call_id: result.tool_call_id ?? call.id,
       name: tool.function.name,
     })
