@@ -1,0 +1,14 @@
+{
+  "name": "dino-jump",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "bun build ./src/game.ts --outfile ./dist/game.js --target browser && cp ./index.html ./dist/index.html && cp ./src/style.css ./dist/style.css",
+    "serve": "bun run build && bun ./server.ts"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}
+

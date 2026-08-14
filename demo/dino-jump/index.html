@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f7f7f7" />
+    <title>Dino Dash</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">OFFLINE ARCADE</p>
+          <h1>Dino Dash</h1>
+        </div>
+        <div class="score-panel" aria-live="polite">
+          <span>SCORE</span>
+          <strong id="score">00000</strong>
+        </div>
+      </header>
+      <section class="game-card" aria-label="Dino Dash game">
+        <canvas id="game" width="900" height="320" aria-label="Dino Dash play area"></canvas>
+        <div class="message" id="message">
+          <p class="message-kicker">READY?</p>
+          <h2>Press space to jump</h2>
+          <p>Clear the cacti and chase a high score.</p>
+        </div>
+      </section>
+      <footer class="controls">
+        <span><kbd>SPACE</kbd> or <kbd>↑</kbd> jump</span>
+        <button id="restart" type="button">Restart game</button>
+      </footer>
+    </main>
+    <script type="module" src="./game.js"></script>
+  </body>
+</html>
