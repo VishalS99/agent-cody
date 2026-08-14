@@ -1,3 +1,3 @@
-import { runLoop } from "./agent/loop.js"
+import { runLoop } from "./agent/loop.js";
 
-await runLoop()
+await runLoop();

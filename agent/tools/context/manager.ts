@@ -1,87 +1,68 @@
-import type {
-  ActionStep,
-  AgentContext,
-  ContextState,
-  ContextUpdate,
-} from "../../types.js"
+import type { ActionStep, AgentContext, ContextState, ContextUpdate } from "../../types.js";
 
-export function applyContextUpdate(
-  context: AgentContext,
-  update: ContextUpdate,
-): void {
+export function applyContextUpdate(context: AgentContext, update: ContextUpdate): void {
   switch (update.type) {
     case "set_goal":
-      applyGoalUpdate(context, update.goal, update.steps)
-      return
+      applyGoalUpdate(context, update.goal, update.steps);
+      return;
     case "update_state":
-      applyStateUpdate(context, update)
-      return
+      applyStateUpdate(context, update);
+      return;
   }
 }
 
-function applyGoalUpdate(
-  context: AgentContext,
-  goal: string,
-  steps: string[],
-): void {
-  context.goal = goal
-  context.action_steps = steps.map((action, index): ActionStep => ({
-    action,
-    status: index === 0 ? "current" : "pending",
-  }))
+function applyGoalUpdate(context: AgentContext, goal: string, steps: string[]): void {
+  context.goal = goal;
+  context.action_steps = steps.map(
+    (action, index): ActionStep => ({
+      action,
+      status: index === 0 ? "current" : "pending",
+    }),
+  );
 
-  const state = ensureState(context)
-  state.current_step = steps.length > 0 ? 0 : -1
+  const state = ensureState(context);
+  state.current_step = steps.length > 0 ? 0 : -1;
 }
 
-function applyStateUpdate(
-  context: AgentContext,
-  update: Extract<ContextUpdate, { type: "update_state" }>,
-): void {
-  const state = ensureState(context)
+function applyStateUpdate(context: AgentContext, update: Extract<ContextUpdate, { type: "update_state" }>): void {
+  const state = ensureState(context);
 
   if (update.notes?.trim()) {
-    state.notes.push(update.notes.trim())
+    state.notes.push(update.notes.trim());
   }
   if (update.decision?.trim()) {
-    state.decisions.push(update.decision.trim())
+    state.decisions.push(update.decision.trim());
   }
 
   if (update.step_completed === undefined) {
-    return
+    return;
   }
 
-  const steps = context.action_steps ?? []
-  const completedIndex = update.step_completed
-  if (
-    !Number.isInteger(completedIndex) ||
-    completedIndex < 0 ||
-    completedIndex >= steps.length
-  ) {
-    throw new Error(`Invalid completed step index: ${completedIndex}`)
+  const steps = context.action_steps ?? [];
+  const completedIndex = update.step_completed;
+  if (!Number.isInteger(completedIndex) || completedIndex < 0 || completedIndex >= steps.length) {
+    throw new Error(`Invalid completed step index: ${completedIndex}`);
   }
   if (state.current_step !== completedIndex) {
-    throw new Error(
-      `Step ${completedIndex} is not current; expected ${state.current_step}`,
-    )
+    throw new Error(`Step ${completedIndex} is not current; expected ${state.current_step}`);
   }
 
-  const completedStep = steps[completedIndex]
+  const completedStep = steps[completedIndex];
   if (!completedStep) {
-    throw new Error(`Invalid completed step index: ${completedIndex}`)
+    throw new Error(`Invalid completed step index: ${completedIndex}`);
   }
-  completedStep.status = "completed"
+  completedStep.status = "completed";
 
-  const nextIndex = completedIndex + 1
+  const nextIndex = completedIndex + 1;
   if (nextIndex < steps.length) {
-    const nextStep = steps[nextIndex]
+    const nextStep = steps[nextIndex];
     if (!nextStep) {
-      throw new Error(`Invalid next step index: ${nextIndex}`)
+      throw new Error(`Invalid next step index: ${nextIndex}`);
     }
-    nextStep.status = "current"
-    state.current_step = nextIndex
+    nextStep.status = "current";
+    state.current_step = nextIndex;
   } else {
-    state.current_step = -1
+    state.current_step = -1;
   }
 }
 
@@ -91,6 +72,6 @@ function ensureState(context: AgentContext): ContextState {
     decisions: [],
     current_step: -1,
     files_read: [],
-  }
-  return context.state
+  };
+  return context.state;
 }

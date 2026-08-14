@@ -11,14 +11,14 @@
  * in `errors`. Paths are processed independently — one bad path does not block
  * the rest.
  */
-import * as z from "zod"
-import * as fsProm from "node:fs/promises"
-import * as nodePath from "node:path"
-import type { ToolDefinition, ToolResult } from "../types.js"
-import { resolveInsideRoot } from "./fs_guard.js"
+import * as z from "zod";
+import * as fsProm from "node:fs/promises";
+import * as nodePath from "node:path";
+import type { ToolDefinition, ToolResult } from "../types.js";
+import { resolveInsideRoot } from "./fs_guard.js";
 
-const MAX_CREATES = 5
-const MAX_DELETES = 2
+const MAX_CREATES = 5;
+const MAX_DELETES = 2;
 
 export const fileSchema = z.object({
   path: z
@@ -30,32 +30,26 @@ export const fileSchema = z.object({
           "List of file paths (relative paths resolve against cwd; all paths must stay within the workspace root)",
         ),
     )
-    .describe(
-      "Paths to create or delete; max 5 for 'create', max 2 for 'delete'",
-    ),
+    .describe("Paths to create or delete; max 5 for 'create', max 2 for 'delete'"),
   function: z
     .enum(["create", "delete"])
     .describe(
       "'create' writes a new empty file at each path (parent dirs are created recursively; max 5 paths per call); 'delete' removes the file at each path (max 2 paths per call)",
     ),
-})
+});
 
 export const fileResultSchema = z.object({
-  function: z
-    .enum(["create", "delete"])
-    .describe("Echo of the operation that was performed"),
+  function: z.enum(["create", "delete"]).describe("Echo of the operation that was performed"),
   path: z
     .array(z.string().readonly())
-    .describe(
-      "Absolute paths of files successfully created/deleted (in input order)",
-    ),
+    .describe("Absolute paths of files successfully created/deleted (in input order)"),
   errors: z
     .array(z.string().describe("Error logs if any"))
     .describe("Per-path failure messages; one entry per failed path"),
-})
+});
 
-export type FileSchema = z.infer<typeof fileSchema>
-export type FileResultSchema = z.infer<typeof fileResultSchema>
+export type FileSchema = z.infer<typeof fileSchema>;
+export type FileResultSchema = z.infer<typeof fileResultSchema>;
 
 export const fileToolDefinition: ToolDefinition<typeof fileSchema> = {
   type: "function",
@@ -75,15 +69,15 @@ export const fileToolDefinition: ToolDefinition<typeof fileSchema> = {
     emoji: "\u{1F4C4}\u{FE0E}",
     parameters: fileSchema,
     execute: async (toolId, params: FileSchema): Promise<ToolResult> => {
-      const fn = params.function
-      const max = fn === "create" ? MAX_CREATES : MAX_DELETES
+      const fn = params.function;
+      const max = fn === "create" ? MAX_CREATES : MAX_DELETES;
 
       if (params.path.length === 0) {
         return {
           tool_call_id: toolId,
           content: JSON.stringify({ function: fn, path: [], errors: [] }),
           isError: false,
-        }
+        };
       }
       if (params.path.length > max) {
         return {
@@ -91,22 +85,20 @@ export const fileToolDefinition: ToolDefinition<typeof fileSchema> = {
           content: JSON.stringify({
             function: fn,
             path: [],
-            errors: [
-              `too many paths (${params.path.length}); max ${max} per call for '${fn}'`,
-            ],
+            errors: [`too many paths (${params.path.length}); max ${max} per call for '${fn}'`],
           }),
           isError: true,
-        }
+        };
       }
 
-      const done: string[] = []
-      const errors: string[] = []
+      const done: string[] = [];
+      const errors: string[] = [];
 
       for (const p of params.path) {
-        const guarded = await resolveInsideRoot(p)
+        const guarded = await resolveInsideRoot(p);
         if (!guarded.ok) {
-          errors.push(guarded.error)
-          continue
+          errors.push(guarded.error);
+          continue;
         }
         try {
           if (fn === "create") {
@@ -115,35 +107,28 @@ export const fileToolDefinition: ToolDefinition<typeof fileSchema> = {
             // parent or grandparent symlink pointing outside the root is caught
             // BEFORE any directory is created. Everything created below it is
             // fresh, so no later check can be bypassed.
-            const parent = nodePath.dirname(guarded.path)
-            const existing = await deepestExistingPath(parent)
-            const existingGuard = await resolveInsideRoot(existing)
+            const parent = nodePath.dirname(guarded.path);
+            const existing = await deepestExistingPath(parent);
+            const existingGuard = await resolveInsideRoot(existing);
             if (!existingGuard.ok) {
-              errors.push(existingGuard.error)
-              continue
+              errors.push(existingGuard.error);
+              continue;
             }
-            await fsProm.mkdir(parent, { recursive: true })
-            const target = nodePath.join(
-              await fsProm.realpath(parent),
-              nodePath.basename(guarded.path),
-            )
-            await fsProm.writeFile(target, "", { flag: "wx" })
-            done.push(target)
+            await fsProm.mkdir(parent, { recursive: true });
+            const target = nodePath.join(await fsProm.realpath(parent), nodePath.basename(guarded.path));
+            await fsProm.writeFile(target, "", { flag: "wx" });
+            done.push(target);
           } else {
-            await fsProm.unlink(guarded.path)
-            done.push(guarded.path)
+            await fsProm.unlink(guarded.path);
+            done.push(guarded.path);
           }
         } catch (err: any) {
-          if (err.code === "EEXIST")
-            errors.push(`file already exists: ${p}`)
-          else if (err.code === "ENOENT")
-            errors.push(`file not found: ${p}`)
-          else if (err.code === "EISDIR")
-            errors.push(`path is a directory: ${p}`)
+          if (err.code === "EEXIST") errors.push(`file already exists: ${p}`);
+          else if (err.code === "ENOENT") errors.push(`file not found: ${p}`);
+          else if (err.code === "EISDIR") errors.push(`path is a directory: ${p}`);
           else if (err.code === "ENOTDIR")
-            errors.push(`a path component is a file, not a directory (cannot create ${p})`,)
-          else
-            errors.push(`failed to ${fn} ${p}: ${err.code || err.message}`)
+            errors.push(`a path component is a file, not a directory (cannot create ${p})`);
+          else errors.push(`failed to ${fn} ${p}: ${err.code || err.message}`);
         }
       }
 
@@ -151,23 +136,23 @@ export const fileToolDefinition: ToolDefinition<typeof fileSchema> = {
         tool_call_id: toolId,
         content: JSON.stringify({ function: fn, path: done, errors }),
         isError: errors.length > 0,
-      }
+      };
     },
   },
-}
+};
 
 /** Walks up from `path` until it finds a component that exists on disk. */
 async function deepestExistingPath(path: string): Promise<string> {
-  let cur = path
+  let cur = path;
   while (true) {
     try {
-      await fsProm.access(cur)
-      return cur
+      await fsProm.access(cur);
+      return cur;
     } catch (err: any) {
-      if (err.code !== "ENOENT" && err.code !== "ENOTDIR") throw err
+      if (err.code !== "ENOENT" && err.code !== "ENOTDIR") throw err;
     }
-    const up = nodePath.dirname(cur)
-    if (up === cur) return cur
-    cur = up
+    const up = nodePath.dirname(cur);
+    if (up === cur) return cur;
+    cur = up;
   }
 }

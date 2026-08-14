@@ -13,4 +13,3 @@ Bun.serve({
 });
 
 console.log(`Dino Dash running at http://localhost:${port}`);
-

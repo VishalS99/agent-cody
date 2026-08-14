@@ -1,15 +1,15 @@
 export interface SessionStats {
-  toolCalls: number
-  toolCallSuccesses: number
-  toolCallFailures: number
-  totalToolCallDuration: number
-  toolCallsByName: Record<string, number>
-  toolFailuresByName: Record<string, number>
-  totalLLMCalls: number
-  totalInputTokens: number
-  totalOutputTokens: number
-  totalResponseDurationMs: number
-  currentContextSize: number
+  toolCalls: number;
+  toolCallSuccesses: number;
+  toolCallFailures: number;
+  totalToolCallDuration: number;
+  toolCallsByName: Record<string, number>;
+  toolFailuresByName: Record<string, number>;
+  totalLLMCalls: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalResponseDurationMs: number;
+  currentContextSize: number;
 }
 
 export function createSessionStats(): SessionStats {
@@ -25,7 +25,7 @@ export function createSessionStats(): SessionStats {
     totalOutputTokens: 0,
     totalResponseDurationMs: 0,
     currentContextSize: 0,
-  }
+  };
 }
 
 export function recordToolCall(
@@ -44,19 +44,18 @@ export function recordToolCall(
     },
     toolFailuresByName: {
       ...stats.toolFailuresByName,
-      [call.name]:
-        (stats.toolFailuresByName[call.name] ?? 0) + (call.isError ? 1 : 0),
+      [call.name]: (stats.toolFailuresByName[call.name] ?? 0) + (call.isError ? 1 : 0),
     },
-  }
+  };
 }
 
 export function recordLLMResponse(
   stats: SessionStats,
   resp: {
-    inputTokens: number
-    outputTokens: number
-    durationMs: number
-    model: string
+    inputTokens: number;
+    outputTokens: number;
+    durationMs: number;
+    model: string;
   },
 ): SessionStats {
   return {
@@ -66,19 +65,17 @@ export function recordLLMResponse(
     totalOutputTokens: stats.totalOutputTokens + resp.outputTokens,
     totalResponseDurationMs: stats.totalResponseDurationMs + resp.durationMs,
     currentContextSize: resp.inputTokens,
-  }
+  };
 }
 
 export function toolAverageCallDuration(stats: SessionStats): number {
-  return stats.toolCalls === 0
-    ? 0
-    : stats.totalToolCallDuration / stats.toolCalls
+  return stats.toolCalls === 0 ? 0 : stats.totalToolCallDuration / stats.toolCalls;
 }
 
 export function toolCallSuccessRate(stats: SessionStats): number {
-  return stats.toolCalls === 0 ? 0 : stats.toolCallSuccesses / stats.toolCalls
+  return stats.toolCalls === 0 ? 0 : stats.toolCallSuccesses / stats.toolCalls;
 }
 
 export function toolCallFailureRate(stats: SessionStats): number {
-  return stats.toolCalls === 0 ? 0 : stats.toolCallFailures / stats.toolCalls
+  return stats.toolCalls === 0 ? 0 : stats.toolCallFailures / stats.toolCalls;
 }

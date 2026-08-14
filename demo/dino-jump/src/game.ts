@@ -15,8 +15,20 @@ const context: CanvasRenderingContext2D = drawingContext;
 const width = canvas.width;
 const height = canvas.height;
 const groundY = 258;
-const dino = { x: 90, y: groundY - 46, width: 38, height: 46, velocity: 0, jumping: false };
-let obstacles: Array<{ x: number; width: number; height: number; passed: boolean }> = [];
+const dino = {
+  x: 90,
+  y: groundY - 46,
+  width: 38,
+  height: 46,
+  velocity: 0,
+  jumping: false,
+};
+let obstacles: Array<{
+  x: number;
+  width: number;
+  height: number;
+  passed: boolean;
+}> = [];
 let clouds: Array<{ x: number; y: number; width: number }> = [];
 let score = 0;
 let speed = 6;
@@ -60,7 +72,8 @@ function reset() {
   dino.velocity = 0;
   dino.jumping = false;
   setScore(score);
-  message.innerHTML = "<p class=\"message-kicker\">READY?</p><h2>Press space to jump</h2><p>Clear the cacti and chase a high score.</p>";
+  message.innerHTML =
+    '<p class="message-kicker">READY?</p><h2>Press space to jump</h2><p>Clear the cacti and chase a high score.</p>';
   message.classList.remove("hidden");
 }
 
@@ -105,13 +118,17 @@ function drawScene() {
 
 function collides(obstacle: (typeof obstacles)[number]) {
   const padding = 7;
-  return dino.x + dino.width - padding > obstacle.x && dino.x + padding < obstacle.x + obstacle.width && dino.y + dino.height - padding > groundY - obstacle.height;
+  return (
+    dino.x + dino.width - padding > obstacle.x &&
+    dino.x + padding < obstacle.x + obstacle.width &&
+    dino.y + dino.height - padding > groundY - obstacle.height
+  );
 }
 
 function update(delta: number) {
   const factor = delta / 16.67;
   if (state !== "running") return;
-  score += factor * speed / 6;
+  score += (factor * speed) / 6;
   speed = Math.min(13, 6 + score / 180);
   groundOffset = (groundOffset + speed * factor) % 28;
   dino.velocity += 0.75 * factor;
@@ -124,7 +141,12 @@ function update(delta: number) {
   spawnTimer -= factor;
   if (spawnTimer <= 0) {
     const obstacleHeight = 25 + Math.random() * 20;
-    obstacles.push({ x: width + 10, width: 27, height: obstacleHeight, passed: false });
+    obstacles.push({
+      x: width + 10,
+      width: 27,
+      height: obstacleHeight,
+      passed: false,
+    });
     spawnTimer = 65 + Math.random() * 75 - speed * 2;
   }
   for (const obstacle of obstacles) {
@@ -134,17 +156,24 @@ function update(delta: number) {
     }
     if (collides(obstacle)) {
       state = "over";
-      message.innerHTML = "<p class=\"message-kicker\">GAME OVER</p><h2>Score: " + Math.floor(score).toString().padStart(5, "0") + "</h2><p>Press space or tap restart to run again.</p>";
+      message.innerHTML =
+        '<p class="message-kicker">GAME OVER</p><h2>Score: ' +
+        Math.floor(score).toString().padStart(5, "0") +
+        "</h2><p>Press space or tap restart to run again.</p>";
       message.classList.remove("hidden");
     }
   }
-  obstacles = obstacles.filter((obstacle) => obstacle.x > -40);
+  obstacles = obstacles.filter(obstacle => obstacle.x > -40);
   cloudTimer -= factor;
   if (cloudTimer <= 0) {
-    clouds.push({ x: width + 20, y: 48 + Math.random() * 70, width: 30 + Math.random() * 35 });
+    clouds.push({
+      x: width + 20,
+      y: 48 + Math.random() * 70,
+      width: 30 + Math.random() * 35,
+    });
     cloudTimer = 80 + Math.random() * 140;
   }
-  clouds = clouds.filter((cloud) => cloud.x > -80);
+  clouds = clouds.filter(cloud => cloud.x > -80);
   for (const cloud of clouds) cloud.x -= speed * 0.18 * factor;
   setScore(score);
 }
@@ -157,7 +186,7 @@ function frame(time: number) {
   requestAnimationFrame(frame);
 }
 
-document.addEventListener("keydown", (event) => {
+document.addEventListener("keydown", event => {
   if (event.code === "Space" || event.code === "ArrowUp") {
     event.preventDefault();
     jump();

@@ -18,31 +18,16 @@ import * as z from "zod";
 import type { ToolDefinition, ToolResult } from "../../types.js";
 
 export const goalsInputSchema = z.object({
-  task_goal: z
-    .string()
-    .trim()
-    .min(1)
-    .max(300)
-    .describe("A concise objective describing the user's requested task."),
+  task_goal: z.string().trim().min(1).max(300).describe("A concise objective describing the user's requested task."),
   updated_task_steps: z
-    .array(
-      z
-        .string()
-        .trim()
-        .min(1)
-        .max(300)
-        .describe("One concrete, ordered step toward completing the goal."),
-    )
+    .array(z.string().trim().min(1).max(300).describe("One concrete, ordered step toward completing the goal."))
     .min(1)
     .max(15)
     .describe("An ordered linear plan containing 1 to 15 task steps."),
 });
 
 export const goalsOutputSchema = z.object({
-  error: z
-    .string()
-    .optional()
-    .describe("Human-readable explanation when the goal or steps are rejected."),
+  error: z.string().optional().describe("Human-readable explanation when the goal or steps are rejected."),
   issues: z
     .array(
       z.object({
@@ -60,20 +45,12 @@ export const goalsOutputSchema = z.object({
     )
     .optional()
     .describe("Validation issues found in the goal or task steps."),
-  updated_task_goal: z
-    .string()
-    .optional()
-    .describe("The normalized goal accepted for the task."),
-  updated_task_steps: z
-    .array(z.string())
-    .optional()
-    .describe("The normalized linear steps accepted for the task."),
+  updated_task_goal: z.string().optional().describe("The normalized goal accepted for the task."),
+  updated_task_steps: z.array(z.string()).optional().describe("The normalized linear steps accepted for the task."),
 });
-
 
 export type GoalsInput = z.infer<typeof goalsInputSchema>;
 export type GoalsOutput = z.infer<typeof goalsOutputSchema>;
-
 
 export type GoalValidationIssue = {
   field: "task_goal" | "updated_task_steps";
@@ -85,7 +62,6 @@ export type GoalsValidationResult =
   | { ok: true; task_goal: string; task_steps: string[] }
   | { ok: false; issues: GoalValidationIssue[] };
 
-
 export const goalsToolDefinition: ToolDefinition<typeof goalsInputSchema> = {
   type: "function",
   function: {
@@ -95,10 +71,7 @@ export const goalsToolDefinition: ToolDefinition<typeof goalsInputSchema> = {
     label: "goals",
     emoji: "💡︎",
     parameters: goalsInputSchema,
-    execute: async (
-      toolId: string,
-      params: GoalsInput,
-    ): Promise<ToolResult> => {
+    execute: async (toolId: string, params: GoalsInput): Promise<ToolResult> => {
       const validation = validateGoals(params);
       if (!validation.ok) {
         const result: GoalsOutput = {
@@ -114,7 +87,7 @@ export const goalsToolDefinition: ToolDefinition<typeof goalsInputSchema> = {
 
       return {
         tool_call_id: toolId,
-        content: JSON.stringify({status: "goal_set_success"}),
+        content: JSON.stringify({ status: "goal_set_success" }),
         isError: false,
         contextUpdate: {
           type: "set_goal",
@@ -133,7 +106,6 @@ const negatedDestructiveVerb =
   /\b(?:do\s+not|don't|never|must\s+not|mustn't|avoid)\s+(?:\w+\s+){0,2}(?:delete|deleting|remove|removing|erase|erasing|destroy|destroying|wipe|wiping|purge|purging|format|formatting|reformat|truncate|overwrite|clear|drop|rm|rmdir)\w*\b/i;
 const databaseDestructiveOperation =
   /\b(?:drop|truncate)\s+(?:the\s+)?(?:table|database|schema|collection|view|index)\b|\bdelete\s+from\s+\w+|\b(?:delete|remove|erase|purge|clear|wipe)\b[\s\S]{0,80}\b(?:table|database|schema|collection|rows?|records?|data)\b/i;
-
 
 function unsafeDestructiveRootOperation(value: string): string | undefined {
   if (/[\u0000-\u001f\u007f]/.test(value)) {
@@ -168,10 +140,9 @@ function normalize(value: string): string {
   return value.normalize("NFKC").replace(/\s+/g, " ").trim();
 }
 
-
 export function validateGoals(params: GoalsInput): GoalsValidationResult {
   const taskGoal = normalize(params.task_goal);
-  const taskSteps = params.updated_task_steps.map((step) => normalize(step));
+  const taskSteps = params.updated_task_steps.map(step => normalize(step));
   const issues: GoalValidationIssue[] = [];
 
   const goalIssue = unsafeDestructiveRootOperation(taskGoal);
@@ -191,7 +162,5 @@ export function validateGoals(params: GoalsInput): GoalsValidationResult {
       });
     }
   }
-  return issues.length > 0
-    ? { ok: false, issues }
-    : { ok: true, task_goal: taskGoal, task_steps: taskSteps };
+  return issues.length > 0 ? { ok: false, issues } : { ok: true, task_goal: taskGoal, task_steps: taskSteps };
 }
