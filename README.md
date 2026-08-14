@@ -170,7 +170,7 @@ flowchart TD
 
 
 - [x] `files` — batch create/delete files (max 5 / 2); each path validated against the workspace root
-- [ ] `writefile` — create/overwrite files with contents (not just empty)
+- [x] `writefile` — create/overwrite files with contents (not just empty)
 - [x] `edit_file` — modify files in-place with batched atomic edits (edit/insert/delete/replace)
 - [ ] `filediff` — visual diffs between file versions
 - [ ] `bash_exec` — shell command execution (validation/sandbox TBD)
