@@ -18,26 +18,56 @@ import * as z from "zod";
 import type { ToolDefinition, ToolResult } from "../../types.js";
 
 export const goalsInputSchema = z.object({
-  task_goal: z.string().trim().min(1).max(300).describe("description"),
-  updated_task_steps: z.array(
-    z.string().trim().min(1).max(300)
-  ).min(1).max(15),
+  task_goal: z
+    .string()
+    .trim()
+    .min(1)
+    .max(300)
+    .describe("A concise objective describing the user's requested task."),
+  updated_task_steps: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(300)
+        .describe("One concrete, ordered step toward completing the goal."),
+    )
+    .min(1)
+    .max(15)
+    .describe("An ordered linear plan containing 1 to 15 task steps."),
 });
 
 export const goalsOutputSchema = z.object({
-  error: z.string().optional().describe("description"),
+  error: z
+    .string()
+    .optional()
+    .describe("Human-readable explanation when the goal or steps are rejected."),
   issues: z
     .array(
       z.object({
-        field: z.enum(["task_goal", "updated_task_steps"]),
-        index: z.number().int().nonnegative().optional(),
-        reason: z.string(),
+        field: z
+          .enum(["task_goal", "updated_task_steps"])
+          .describe("The input field containing the validation problem."),
+        index: z
+          .number()
+          .int()
+          .nonnegative()
+          .optional()
+          .describe("Zero-based step index when the issue is in a task step."),
+        reason: z.string().describe("Why the value failed validation."),
       }),
     )
     .optional()
-    .describe("validation issues"),
-  updated_task_goal: z.string().optional().describe("description"),
-  updated_task_steps: z.array(z.string()).optional().describe("description"),
+    .describe("Validation issues found in the goal or task steps."),
+  updated_task_goal: z
+    .string()
+    .optional()
+    .describe("The normalized goal accepted for the task."),
+  updated_task_steps: z
+    .array(z.string())
+    .optional()
+    .describe("The normalized linear steps accepted for the task."),
 });
 
 
@@ -61,9 +91,9 @@ export const goalsToolDefinition: ToolDefinition<typeof goalsInputSchema> = {
   function: {
     name: "goals",
     description:
-      "Updates the task goal and adds linear task steps to accomplish it.",
+      "Set the agent's concise task goal and ordered linear execution steps before workspace work. The goal and steps are normalized and checked for unsafe filesystem and database-destructive operations.",
     label: "goals",
-    emoji: "",
+    emoji: "💡︎",
     parameters: goalsInputSchema,
     execute: async (
       toolId: string,
@@ -82,10 +112,6 @@ export const goalsToolDefinition: ToolDefinition<typeof goalsInputSchema> = {
         };
       }
 
-      const result: GoalsOutput = {
-        updated_task_goal: validation.task_goal,
-        updated_task_steps: validation.task_steps,
-      };
       return {
         tool_call_id: toolId,
         content: JSON.stringify({status: "goal_set_success"}),
