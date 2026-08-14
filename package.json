@@ -4,9 +4,10 @@
     "start": "NODE_ENV=dev bun run main.ts",
     "typecheck": "tsc --noEmit",
     "format": "biome format --write .",
-    "format:check": "biome format .",
+    "format:check": "biome format --check .",
     "lint": "biome lint .",
-    "lint:fix": "biome lint --write ."
+    "lint:fix": "biome lint --write .",
+    "check": "bun run typecheck && bun run lint && bun run format:check"
   },
   "dependencies": {
     "@opentui/core": "^0.5.1",

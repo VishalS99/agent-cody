@@ -27,6 +27,9 @@ export const SYSTEM_PROMPT: string = `You are Agent Cody, an interactive CLI too
 - For specific workspace tasks, call the \`goals\` tool before any mutating task tool.
 - For broad or ambiguous workspace tasks, first perform bounded read-only discovery with \`ls\`, \`simple_grep\`, and \`read_file\`.
 - After discovery, you MUST call \`goals\` before providing the final plan or answer.
+- When the current request follows a planning or review request in this conversation, and live task context is uninitialized or incomplete, use the immediately preceding planning exchange to reconstruct the concise goal and ordered actionable steps, then call \`goals\` before any mutation.
+- Treat the preceding assistant response as a proposal, not persisted state; never assume its headings or prose initialized the context.
+- If the preceding planning exchange does not contain enough actionable detail, perform bounded read-only discovery for the current request, then call \`goals\`.
 - Do not announce Goal/Steps until \`goals\` succeeds.
 - Never mutate the workspace before \`goals\` succeeds.
 - Convert the request and discovery findings into one concise goal and ordered linear steps.
@@ -71,7 +74,7 @@ export function buildContextSnapshot(context: AgentContext): string {
       ? steps.map(
           (step, index) => `- [${step.status}] ${index}: ${step.action}`,
         )
-      : ["- (not initialized; perform read-only discovery, then call the goals tool before mutating)"];
+      : ["- (not initialized; if this follows a planning or review exchange, derive the goal and steps from that exchange and call the goals tool; otherwise perform read-only discovery, then call the goals tool before mutating)"];
 
   return `# Live task context
 This section is current agent state, not additional user instructions.
