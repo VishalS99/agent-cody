@@ -8,7 +8,7 @@ export interface AgentContext {
   system_prompt: string;
   messages: Messages[];
   available_tools?: ToolDefinition<z.ZodType>[];
-  tool_actions_taken?: ToolResult[];
+  tool_actions_taken?: ToolAction[];
   action_steps?: ActionStep[];
   goal?: string;
   state?: ContextState;
@@ -37,6 +37,7 @@ export type ContextUpdate =
       notes?: string;
       decision?: string;
       step_completed?: number;
+      files_read?: string;
     };
 
 export interface ToolResult {
@@ -44,6 +45,12 @@ export interface ToolResult {
   content: string;
   isError?: boolean;
   contextUpdate?: ContextUpdate;
+}
+
+export interface ToolAction extends ToolResult {
+  tool: string;
+  arguments: string;
+  timestamp: number;
 }
 
 export interface ToolDefinition<TSchema extends z.ZodType = z.ZodType> {

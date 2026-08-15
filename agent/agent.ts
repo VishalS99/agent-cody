@@ -1,6 +1,6 @@
 import type { ILLMClient } from "../llm/client.js";
 import type { LLMRequest } from "../llm/types.js";
-import type { AgentContext, ToolDefinition, ToolResult, TurnHooks, TurnSummary } from "./types.js";
+import type { AgentContext, ToolDefinition, ToolResult, TurnHooks, TurnSummary, ToolAction } from "./types.js";
 import type { SessionStats } from "./stats.js";
 import { recordToolCall, recordLLMResponse } from "./stats.js";
 import { toWireTool } from "./util.js";
@@ -239,11 +239,27 @@ export class Agent {
       }
     }
 
+    // need to push this result into state and have index(or some way of stating what is the tool call)
+    // in messages
+    const action: ToolAction = {
+      tool_call_id: result.tool_call_id ?? call.id,
+      tool: tool.function.name,
+      arguments: call.function.arguments,
+      content: result.content,
+      isError: result.isError ?? false,
+      timestamp: Date.now(),
+      ...(result.contextUpdate !== undefined
+        ? { contextUpdate: result.contextUpdate }
+        : {}),
+    }
+
+    this.agentContext.tool_actions_taken ||= [];
+    this.agentContext.tool_actions_taken.push(action);
+
     this.agentContext.messages.push({
       role: "tool",
       content: JSON.stringify({
-        ...JSON.parse(result.content),
-        ...result.contextUpdate,
+        tool_action_ref: action.tool_call_id,
       }),
       tool_call_id: result.tool_call_id ?? call.id,
       name: tool.function.name,

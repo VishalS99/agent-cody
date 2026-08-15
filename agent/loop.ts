@@ -14,6 +14,7 @@ import { fileToolDefinition } from "./tools/file.js";
 import { createSessionStats } from "./stats.js";
 import { allowedRoot } from "./tools/fs_guard.js";
 import { goalsToolDefinition } from "./tools/context/goals.js";
+import { stateToolDefinition } from "./tools/context/state.js";
 
 async function buildAgentContext(): Promise<AgentContext> {
   const root = await allowedRoot();
@@ -28,6 +29,7 @@ async function buildAgentContext(): Promise<AgentContext> {
       editFileToolDefinition,
       fileToolDefinition,
       goalsToolDefinition,
+      stateToolDefinition
     ],
     tool_actions_taken: [],
   };

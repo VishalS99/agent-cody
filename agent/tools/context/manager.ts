@@ -34,6 +34,10 @@ function applyStateUpdate(context: AgentContext, update: Extract<ContextUpdate, 
     state.decisions.push(update.decision.trim());
   }
 
+  if (update.files_read?.trim()) {
+    state.files_read.push(update.files_read.trim());
+  }
+
   if (update.step_completed === undefined) {
     return;
   }
@@ -56,10 +60,10 @@ function applyStateUpdate(context: AgentContext, update: Extract<ContextUpdate, 
   const nextIndex = completedIndex + 1;
   if (nextIndex < steps.length) {
     const nextStep = steps[nextIndex];
-    if (!nextStep) {
-      throw new Error(`Invalid next step index: ${nextIndex}`);
-    }
-    nextStep.status = "current";
+    // if (!nextStep) {
+      // throw new Error(`Invalid next step index: ${nextIndex}`);
+    // }
+    nextStep!.status = "current";
     state.current_step = nextIndex;
   } else {
     state.current_step = -1;

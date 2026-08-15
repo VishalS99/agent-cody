@@ -111,6 +111,10 @@ export const readFileToolDefinition: ToolDefinition<typeof fileReadSchema> = {
           tool_call_id: toolId,
           content: JSON.stringify(result),
           isError: false,
+          contextUpdate: {
+            type: "update_state",
+            files_read: resolvedPath,
+          },
         };
       } catch (err) {
         logger.error({ event: "read_file_error", toolId, resolvedPath, err: String(err) }, "read_file failed");
