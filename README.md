@@ -1,5 +1,5 @@
 
-# Agent Cody Banks
+# Agent Cody
 <img src="image.png" alt="Agent Cody Banks" width="80%"  />
 A harness to learn about harnesses...
 
@@ -7,7 +7,7 @@ An interactive CLI agent harness built with Bun, TypeScript, and OpenAI-compatib
 
 ## Overview
 
-Agent Cody Banks is a command-line AI agent that helps with software engineering tasks. It interacts with users through a readline prompt, calls tools on their behalf (file listing, reading, searching), and tracks session statistics including token usage, tool call success rates, and response durations.
+Agent Cody is a command-line AI agent that helps with software engineering tasks. is a command-line AI agent that helps with software engineering tasks. It interacts with users through a readline prompt, calls tools on their behalf (file operations, searching, and task context management), and tracks session statistics including token usage, tool call success rates, and response durations.
 
 ### Key Features
 
@@ -16,9 +16,11 @@ Agent Cody Banks is a command-line AI agent that helps with software engineering
 - **Built-in Tools**:
   - `ls` — List directory contents with hidden file visibility controls
   - `read_file` — Read text files with line offsets, truncation handling, and binary detection
+  - `simple_grep` — Regex search across files with configurable context lines
   - `edit_file` — Apply batched atomic edits (edit/insert/delete/replace) to text files; all ops validated before mutation
   - `files` — Batch create (max 5) or delete (max 2) files; parent dirs created recursively; each path validated against workspace root
-  - `simple_grep` — Regex search across files with configurable context lines
+  - `goals` — Initialize the current goal and ordered action steps
+  - `state` — Update live task notes, decisions, completed steps, and files read
 - **File Path Guards**: All file operations validate paths against workspace root (`agent/tools/fs_guard.ts`) to prevent directory traversal via `..` or symlinks
 - **Structured Logging**: JSON logging via Pino with OpenTelemetry-compliant attributes
 - **Session Statistics**: Real-time tracking of tool calls, success/failure rates, token usage, and latency
@@ -34,8 +36,8 @@ main.ts (entry)
     ↓
 agent/ (orchestration layer)
     ├── loop.ts       — Agent loop: prompts, dispatches tools, tracks stats
-    ├── types.ts      — AgentContext, ToolDefinition, ToolResult
-    ├── prompt.ts     — System prompt defining Agent Cody's behavior
+    ├── types.ts      — AgentContext, ToolDefinition, ToolResult, TurnHooks
+    ├── prompt.ts     — System prompt and live task context snapshot
     ├── util.ts       — Wire-format conversion (ToolDefinition → ChatCompletionTool)
     ├── stats.ts      — SessionStats tracking and recording
     └── tools/        — Built-in tool implementations
@@ -44,7 +46,8 @@ agent/ (orchestration layer)
         ├── edit_file.ts
         ├── grep.ts
         ├── file.ts
-        └── bash_exec.ts   ← stub
+        ├── bash_exec.ts   ← stub
+        └── context/     — Goal and live task state tools
 
 llm/ (transport layer)
     ├── client.ts     — LLMClient: transforms messages to OpenAI API format
@@ -60,6 +63,8 @@ schemas/messages.ts     — Message types (Role, Messages, ToolCall)
 - **Agent → LLM unidirectionality**: The agent layer constructs `LLMRequest` objects; the LLM layer never imports from agent
 - **Schema-driven boundaries**: All I/O uses Zod schemas for runtime validation
 - **Tool abstraction**: Tools define their own Zod parameters and an `execute` function; the loop handles dispatch and error handling uniformly
+- **Turn hooks**: `TurnHooks` exposes streaming, tool-call, usage, step-completion, and turn-end events without coupling the agent loop to presentation
+- **Live task context**: Goals and action steps are initialized when assigned, while state, decisions, notes, and file tracking are updated as work progresses
 
 ## Getting Started
 
@@ -114,13 +119,20 @@ You'll see a prompt: `### Prompt:` — type your query and press Enter.
 - **No comments**: Unless explicitly requested
 - **Strict TypeScript**: `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`
 
+### Agent Turns and Context
+
+`Agent.turn()` accepts optional `TurnHooks` callbacks for streamed deltas, tool-call start and result events, usage updates, completed action steps, and turn completion. The loop initializes the conversation with the seven registered tools: `ls`, `read_file`, `simple_grep`, `edit_file`, `files`, `goals`, and `state`.
+
+Live task context is kept alongside conversation messages. The `goals` tool initializes the current goal and ordered action steps; the `state` tool records notes, decisions, completed steps, and files read. The current context snapshot is added to each request system prompt, and successful context updates are applied after tool execution.
+
 ### Adding a New Tool
 
 1. Create `agent/tools/my_tool.ts`
 2. Define a Zod schema for parameters
 3. Export a `ToolDefinition` with `name`, `description`, `label`, `parameters`, and `execute`
 4. Register it in `agent/loop.ts` in the `available_tools` array
-5. Run `bun run lint:fix` and `bun run typecheck`
+5. If the tool changes task context, return a validated `contextUpdate`
+6. Run `bun run lint:fix` and `bun run typecheck`
 
 ## Telemetry
 All logging is structured JSON via Pino, with OpenTelemetry-compatible fields:
@@ -170,8 +182,9 @@ flowchart TD
 
 
 - [x] `files` — batch create/delete files (max 5 / 2); each path validated against the workspace root
-- [x] `writefile` — create/overwrite files with contents (not just empty)
 - [x] `edit_file` — modify files in-place with batched atomic edits (edit/insert/delete/replace)
+- [x] `goals` — initialize the current goal and ordered action steps
+- [x] `state` — update live task notes, decisions, completed steps, and files read
 - [ ] `filediff` — visual diffs between file versions
 - [ ] `bash_exec` — shell command execution (validation/sandbox TBD)
 - [ ] `websearch` — search the web
