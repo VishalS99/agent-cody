@@ -8,7 +8,7 @@ import { applyContextUpdate } from "./tools/context/manager.js";
 import { buildRequestSystemPrompt } from "./prompt.js";
 import { logger } from "../config/logger.js";
 import type { ChatCompletionMessageFunctionToolCall, ChatCompletionChunk } from "openai/resources.js";
-
+import type { Messages } from "../schemas/messages.js";
 const MAX_TOOL_ITERATIONS = 50;
 
 export class Agent {
@@ -154,8 +154,27 @@ export class Agent {
     return { reply, toolCalls: toolCallCount, durationMs };
   }
 
+  hydrateToolMessages(): Messages[] {
+    const toolMap = new Map((this.agentContext.tool_actions_taken ?? []).map(action => [action.tool_call_id, action]));
+
+    return this.agentContext.messages.map(msg => {
+      if (msg.role !== "tool") {
+        return msg;
+      }
+
+      const tool = toolMap.get(msg.tool_call_id ?? "");
+      if (!tool) {
+        throw new Error(`Missing stored tool action for call ${msg.tool_call_id ?? "(unknown)"}`);
+      }
+
+      return { ...msg, content: tool.content };
+    });
+  }
+
   toLLMRequest(): LLMRequest {
-    const req: LLMRequest = { messages: this.agentContext.messages };
+    // perform tool hydration
+    const hydratedMessages = this.hydrateToolMessages();
+    const req: LLMRequest = { messages: hydratedMessages };
 
     if (this.agentContext.system_prompt) {
       req.systemPrompt = buildRequestSystemPrompt(this.agentContext);
@@ -174,43 +193,43 @@ export class Agent {
     const tool = this.findToolDefinition(call.function.name);
 
     if (!tool) {
-      this.agentContext.messages.push({
-        role: "tool",
-        content: JSON.stringify({
-          error: `Tool '${call.function.name}' not found`,
-        }),
-        tool_call_id: call.id,
-        name: call.function.name,
-      });
-      return {
+      const result: ToolResult = {
         tool_call_id: call.id,
         content: JSON.stringify({
           error: `Tool '${call.function.name}' not found`,
         }),
         isError: true,
       };
+      this.recordToolAction(call, call.function.name, result);
+      return result;
     }
 
-    const parsedParams = tool.function.parameters.safeParse(JSON.parse(call.function.arguments));
-    if (!parsedParams.success) {
-      this.agentContext.messages.push({
-        role: "tool",
-        content: JSON.stringify({
-          error: `Invalid arguments: ${parsedParams.error.message}`,
-          arguments: call.function.arguments,
-        }),
-        tool_call_id: call.id,
-        name: call.function.name,
-      });
-
-      return {
+    let rawParams: unknown;
+    try {
+      rawParams = JSON.parse(call.function.arguments);
+    } catch {
+      const result: ToolResult = {
         tool_call_id: call.id,
         content: JSON.stringify({
-          error: `Invalid arguments: ${parsedParams.error.message}`,
-          arguments: call.function.arguments,
+          error: "Invalid JSON tool arguments",
         }),
         isError: true,
       };
+      this.recordToolAction(call, tool.function.name, result);
+      return result;
+    }
+
+    const parsedParams = tool.function.parameters.safeParse(rawParams);
+    if (!parsedParams.success) {
+      const result: ToolResult = {
+        tool_call_id: call.id,
+        content: JSON.stringify({
+          error: `Invalid arguments: ${parsedParams.error.message}`,
+        }),
+        isError: true,
+      };
+      this.recordToolAction(call, tool.function.name, result);
+      return result;
     }
 
     let result: ToolResult;
@@ -220,11 +239,12 @@ export class Agent {
       result = {
         tool_call_id: call.id,
         content: JSON.stringify({
-          error: `Execution error: ${(err as Error).message}`,
+          error: `Execution error: ${err instanceof Error ? err.message : String(err)}`,
         }),
         isError: true,
       };
     }
+
     if (!result.isError && result.contextUpdate) {
       try {
         applyContextUpdate(this.agentContext, result.contextUpdate);
@@ -239,33 +259,31 @@ export class Agent {
       }
     }
 
-    // need to push this result into state and have index(or some way of stating what is the tool call)
-    // in messages
+    this.recordToolAction(call, tool.function.name, result);
+    return result;
+  }
+
+  private recordToolAction(call: ChatCompletionMessageFunctionToolCall, toolName: string, result: ToolResult): void {
+    const toolCallId = result.tool_call_id ?? call.id;
     const action: ToolAction = {
-      tool_call_id: result.tool_call_id ?? call.id,
-      tool: tool.function.name,
+      tool_call_id: toolCallId,
+      tool: toolName,
       arguments: call.function.arguments,
       content: result.content,
       isError: result.isError ?? false,
       timestamp: Date.now(),
-      ...(result.contextUpdate !== undefined
-        ? { contextUpdate: result.contextUpdate }
-        : {}),
-    }
+      ...(result.contextUpdate !== undefined ? { contextUpdate: result.contextUpdate } : {}),
+    };
 
     this.agentContext.tool_actions_taken ||= [];
     this.agentContext.tool_actions_taken.push(action);
 
     this.agentContext.messages.push({
       role: "tool",
-      content: JSON.stringify({
-        tool_action_ref: action.tool_call_id,
-      }),
-      tool_call_id: result.tool_call_id ?? call.id,
-      name: tool.function.name,
+      content: "",
+      tool_call_id: toolCallId,
+      name: toolName,
     });
-
-    return result;
   }
 
   getStats(): SessionStats {

@@ -61,7 +61,7 @@ function applyStateUpdate(context: AgentContext, update: Extract<ContextUpdate, 
   if (nextIndex < steps.length) {
     const nextStep = steps[nextIndex];
     // if (!nextStep) {
-      // throw new Error(`Invalid next step index: ${nextIndex}`);
+    // throw new Error(`Invalid next step index: ${nextIndex}`);
     // }
     nextStep!.status = "current";
     state.current_step = nextIndex;

@@ -29,7 +29,7 @@ async function buildAgentContext(): Promise<AgentContext> {
       editFileToolDefinition,
       fileToolDefinition,
       goalsToolDefinition,
-      stateToolDefinition
+      stateToolDefinition,
     ],
     tool_actions_taken: [],
   };
