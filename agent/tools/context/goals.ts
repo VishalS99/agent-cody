@@ -108,7 +108,7 @@ const databaseDestructiveOperation =
   /\b(?:drop|truncate)\s+(?:the\s+)?(?:table|database|schema|collection|view|index)\b|\bdelete\s+from\s+\w+|\b(?:delete|remove|erase|purge|clear|wipe)\b[\s\S]{0,80}\b(?:table|database|schema|collection|rows?|records?|data)\b/i;
 
 function unsafeDestructiveRootOperation(value: string): string | undefined {
-  if (/[\u0000-\u001f\u007f]/.test(value)) {
+  if (hasControlCharacters(value)) {
     return "Control characters are not allowed";
   }
   if (!destructiveVerb.test(value) || negatedDestructiveVerb.test(value)) {
@@ -116,7 +116,7 @@ function unsafeDestructiveRootOperation(value: string): string | undefined {
   }
 
   const rootTarget =
-    /(?:^|[\s"'`()\[\],;:])\/(?=$|[\s"'`()\[\],;:])|(?:\b(?:the\s+)?(?:file\s*system|workspace|project|repository|repo)?\s*root(?:\s+(?:directory|folder|file\s*system))?\b)(?!\s+cause\b)|(?:\b(?:current|entire)\s+(?:workspace|project|repository|repo)\b)|(?:^|[\s"'`()\[\],;:])\.{1,2}\/?(?=$|[\s"'`()\[\],;:])/i;
+    /(?:^|[\s"'()[\],;:])[/](?=$|[\s"'()[\],;:])|(?:\b(?:the\s+)?(?:file\s*system|workspace|project|repository|repo)?\s*root(?:\s+(?:directory|folder|file\s*system))?\b)(?!\s+cause\b)|(?:\b(?:current|entire)\s+(?:workspace|project|repository|repo)\b)|(?:^|[\s"'()[\],;:])\.{1,2}[/]?(?=$|[\s"'()[\],;:])/i;
   if (rootTarget.test(value)) {
     return "Destructive operations targeting the filesystem or workspace root are prohibited";
   }
@@ -134,6 +134,13 @@ function unsafeDatabaseDestructiveOperation(value: string): string | undefined {
   }
 
   return undefined;
+}
+
+function hasControlCharacters(value: string): boolean {
+  return Array.from(value).some(character => {
+    const codePoint = character.codePointAt(0);
+    return codePoint !== undefined && (codePoint <= 0x1f || codePoint === 0x7f);
+  });
 }
 
 function normalize(value: string): string {

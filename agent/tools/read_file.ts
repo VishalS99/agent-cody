@@ -97,7 +97,7 @@ export const readFileToolDefinition: ToolDefinition<typeof fileReadSchema> = {
           };
         }
         limit = limit ?? MAX_LINES;
-        let res = await readFileFromLineOffset(resolvedPath, offset, limit);
+        const res = await readFileFromLineOffset(resolvedPath, offset, limit);
 
         const result: FileReadResult = {
           path: resolvedPath,
@@ -140,8 +140,8 @@ async function readFileFromLineOffset(filePath: string, lineOffset: number, limi
   let isTruncated: boolean = false;
   const content: { lineNo: number; line: string }[] = [];
 
-  let startReadLine = lineOffset;
-  let endReadLine = lineOffset + limit - 1;
+  const startReadLine = lineOffset;
+  const endReadLine = lineOffset + limit - 1;
 
   for await (const line of rl) {
     currentLineNo++;

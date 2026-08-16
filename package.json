@@ -4,7 +4,7 @@
     "start": "NODE_ENV=dev bun run main.ts",
     "typecheck": "tsc --noEmit",
     "format": "biome format --write .",
-    "format:check": "biome format --check .",
+    "format:check": "biome check --formatter-enabled=true --linter-enabled=false --assist-enabled=false .",
     "lint": "biome lint .",
     "lint:fix": "biome lint --write .",
     "check": "bun run typecheck && bun run lint && bun run format:check"

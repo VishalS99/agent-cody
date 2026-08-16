@@ -69,6 +69,7 @@ export interface TurnHooks {
   onDelta?: (text: string) => void;
   onToolCallStart?: (call: ToolCall) => void;
   onToolCallResult?: (result: ToolResult) => void;
+  onStepCompleted?: (step: ActionStep, index: number, nextStep?: ActionStep) => void;
   onUsage?: (usage: SessionStats) => void;
   onTurnEnd?: (reply: string, toolCalls: number) => void;
 }

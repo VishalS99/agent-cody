@@ -81,6 +81,10 @@ export async function runLoop(): Promise<void> {
           streamed += text;
           process.stdout.write(text);
         },
+        onStepCompleted: (step, index, nextStep) => {
+          process.stdout.write(`\n✓ Step ${index + 1} completed: ${step.action}\n`);
+          if (nextStep) process.stdout.write(`→ Next: ${nextStep.action}\n`);
+        },
       });
 
       if (process.stdout.isTTY && streamed.length > 0) {

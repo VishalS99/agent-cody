@@ -43,38 +43,33 @@ async function* walkFiles(root: string, include?: string): AsyncGenerator<string
 }
 
 async function searchFile(filePath: string, regex: RegExp, contextLines: number): Promise<GrepMatch[]> {
-  try {
-    const content = await fs.readFile(filePath, "utf-8");
-    // Quick binary check (null byte detection)
-    if (content.includes("\0")) return [];
+  const content = await fs.readFile(filePath, "utf-8");
+  // Quick binary check (null byte detection)
+  if (content.includes("\0")) return [];
 
-    const lines = content.split(/\r?\n/);
-    const matches: GrepMatch[] = [];
+  const lines = content.split(/\r?\n/);
+  const matches: GrepMatch[] = [];
+  let lineCount = 0;
 
-    let lineCount = 0;
+  for (const line of lines) {
+    regex.lastIndex = 0; // Reset state for /g flag safety
+    if (regex.test(line)) {
+      const start = Math.max(0, lineCount - contextLines);
+      const end = Math.min(lines.length, lineCount + contextLines + 1);
 
-    for (const line of lines) {
-      regex.lastIndex = 0; // Reset state for /g flag safety
-      if (regex.test(line)) {
-        const start = Math.max(0, lineCount - contextLines);
-        const end = Math.min(lines.length, lineCount + contextLines + 1);
-
-        matches.push({
-          file: filePath,
-          line: lineCount + 1,
-          context: lines.slice(start, end).map((text, idx) => ({
-            line: start + idx + 1,
-            text,
-          })),
-        });
-      }
-      lineCount++;
+      matches.push({
+        file: filePath,
+        line: lineCount + 1,
+        context: lines.slice(start, end).map((text, idx) => ({
+          line: start + idx + 1,
+          text,
+        })),
+      });
     }
-
-    return matches;
-  } catch (err) {
-    return [];
+    lineCount++;
   }
+
+  return matches;
 }
 
 export const grepToolDefinition: ToolDefinition<typeof grepSchema> = {

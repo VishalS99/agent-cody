@@ -122,7 +122,7 @@ export class Agent {
 
         const toolStart = performance.now();
         hooks?.onToolCallStart?.(call);
-        const result = await this.dispatchToolCall(call);
+        const result = await this.dispatchToolCall(call, hooks);
         hooks?.onToolCallResult?.(result);
         toolCallCount++;
         this.stats = recordToolCall(this.stats, {
@@ -189,7 +189,7 @@ export class Agent {
     return this.agentContext.available_tools?.find(t => t.function.name === toolName);
   }
 
-  async dispatchToolCall(call: ChatCompletionMessageFunctionToolCall): Promise<ToolResult> {
+  async dispatchToolCall(call: ChatCompletionMessageFunctionToolCall, hooks?: TurnHooks): Promise<ToolResult> {
     const tool = this.findToolDefinition(call.function.name);
 
     if (!tool) {
@@ -244,7 +244,8 @@ export class Agent {
         isError: true,
       };
     }
-
+    const completedIndex =
+      result.contextUpdate?.type === "update_state" ? result.contextUpdate.step_completed : undefined;
     if (!result.isError && result.contextUpdate) {
       try {
         applyContextUpdate(this.agentContext, result.contextUpdate);
@@ -260,6 +261,13 @@ export class Agent {
     }
 
     this.recordToolAction(call, tool.function.name, result);
+
+    if (!result.isError && completedIndex !== undefined) {
+      const completedStep = this.agentContext.action_steps?.[completedIndex];
+      const nextStep = this.agentContext.action_steps?.[completedIndex + 1];
+      if (completedStep) hooks?.onStepCompleted?.(completedStep, completedIndex, nextStep);
+    }
+
     return result;
   }
 

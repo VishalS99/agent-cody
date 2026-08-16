@@ -15,6 +15,7 @@ import * as z from "zod";
 import * as fsProm from "node:fs/promises";
 import * as nodePath from "node:path";
 import type { ToolDefinition, ToolResult } from "../types.js";
+import { errorCode, errorMessage } from "../util.js";
 import { resolveInsideRoot } from "./fs_guard.js";
 
 const MAX_CREATES = 5;
@@ -122,13 +123,13 @@ export const fileToolDefinition: ToolDefinition<typeof fileSchema> = {
             await fsProm.unlink(guarded.path);
             done.push(guarded.path);
           }
-        } catch (err: any) {
-          if (err.code === "EEXIST") errors.push(`file already exists: ${p}`);
-          else if (err.code === "ENOENT") errors.push(`file not found: ${p}`);
-          else if (err.code === "EISDIR") errors.push(`path is a directory: ${p}`);
-          else if (err.code === "ENOTDIR")
-            errors.push(`a path component is a file, not a directory (cannot create ${p})`);
-          else errors.push(`failed to ${fn} ${p}: ${err.code || err.message}`);
+        } catch (err) {
+          const code = errorCode(err);
+          if (code === "EEXIST") errors.push(`file already exists: ${p}`);
+          else if (code === "ENOENT") errors.push(`file not found: ${p}`);
+          else if (code === "EISDIR") errors.push(`path is a directory: ${p}`);
+          else if (code === "ENOTDIR") errors.push(`a path component is a file, not a directory (cannot create ${p})`);
+          else errors.push(`failed to ${fn} ${p}: ${code ?? errorMessage(err)}`);
         }
       }
 
@@ -148,8 +149,9 @@ async function deepestExistingPath(path: string): Promise<string> {
     try {
       await fsProm.access(cur);
       return cur;
-    } catch (err: any) {
-      if (err.code !== "ENOENT" && err.code !== "ENOTDIR") throw err;
+    } catch (err) {
+      const code = errorCode(err);
+      if (code !== "ENOENT" && code !== "ENOTDIR") throw err;
     }
     const up = nodePath.dirname(cur);
     if (up === cur) return cur;

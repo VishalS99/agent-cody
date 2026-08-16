@@ -21,6 +21,7 @@
 import * as z from "zod";
 import type { ToolDefinition, ToolResult } from "../types.js";
 import * as fsProm from "node:fs/promises";
+import { errorCode, errorMessage } from "../util.js";
 import { resolveInsideRoot } from "./fs_guard.js";
 
 export const editFileOpSchema = z.discriminatedUnion("function", [
@@ -168,8 +169,7 @@ export const editFileToolDefinition: ToolDefinition<typeof editFileSchema> = {
 
       // ops validation
       let opsValFailure: OpsFailure | null = null;
-      for (let i = 0; i < ops.length; i++) {
-        const op = ops[i]!;
+      for (const [i, op] of ops.entries()) {
         opsValFailure = validateOps(op, i, lines);
         if (opsValFailure) break;
       }
@@ -221,8 +221,8 @@ export const editFileToolDefinition: ToolDefinition<typeof editFileSchema> = {
             const m = textArr.length;
             const replacement: string[] =
               m === 1
-                ? [prefix + textArr[0]! + suffix]
-                : [prefix + textArr[0]!, ...textArr.slice(1, -1), textArr[m - 1]! + suffix];
+                ? [prefix + (textArr[0] ?? "") + suffix]
+                : [prefix + (textArr[0] ?? ""), ...textArr.slice(1, -1), (textArr[m - 1] ?? "") + suffix];
             lines.splice(lineNo - 1, 1, ...replacement);
             break;
           }
@@ -246,8 +246,8 @@ export const editFileToolDefinition: ToolDefinition<typeof editFileSchema> = {
             const m = textArr.length;
             const replacement: string[] =
               m === 1
-                ? [prefix + textArr[0]! + suffix]
-                : [prefix + textArr[0]!, ...textArr.slice(1, -1), textArr[m - 1]! + suffix];
+                ? [prefix + (textArr[0] ?? "") + suffix]
+                : [prefix + (textArr[0] ?? ""), ...textArr.slice(1, -1), (textArr[m - 1] ?? "") + suffix];
             lines.splice(lineNo - 1, 1, ...replacement);
             break;
           }
@@ -290,10 +290,9 @@ export const editFileToolDefinition: ToolDefinition<typeof editFileSchema> = {
  */
 function validateInterOps(ops: EditFileOpSchema[]): OpsFailure | null {
   let opsValFailure: OpsFailure | null = null;
-  for (let i = 0; i < ops.length && !opsValFailure; i++) {
-    const opsA = ops[i]!;
-    for (let j = i + 1; j < ops.length; j++) {
-      const opsB = ops[j]!;
+  for (const [i, opsA] of ops.entries()) {
+    for (const [j, opsB] of ops.entries()) {
+      if (j <= i) continue;
       if (
         (opsA.function === "delete" || opsA.function === "replace") &&
         opsB.lineNo >= opsA.lineNo &&
@@ -396,7 +395,11 @@ function validateOps(op: EditFileOpSchema, opIndx: number, lines: string[]): Ops
         };
         break;
       }
-      const targetLine = lines[lineNo - 1]!;
+      const targetLine = lines[lineNo - 1];
+      if (targetLine === undefined) {
+        failure.error = `line ${lineNo} does not exist`;
+        break;
+      }
       const resolvedEnd = end === -1 ? targetLine.length : end;
       if (start > targetLine.length) {
         failure.error = `start ${start} out of range for line ${lineNo} (length ${targetLine.length}): "${linePreview(targetLine)}"`;
@@ -433,7 +436,11 @@ function validateOps(op: EditFileOpSchema, opIndx: number, lines: string[]): Ops
         }
         break;
       }
-      const targetLine = lines[lineNo - 1]!;
+      const targetLine = lines[lineNo - 1];
+      if (targetLine === undefined) {
+        failure.error = `line ${lineNo} does not exist`;
+        break;
+      }
       if (start > targetLine.length) {
         failure.error = `start ${start} out of range for line ${lineNo} (length ${targetLine.length}): "${linePreview(targetLine)}"`;
         break;
@@ -471,7 +478,7 @@ function isLowSurrogate(line: string, col: number): boolean {
 
 /** Truncated line content for error messages, so the model can recount columns without a re-read. */
 function linePreview(line: string, max = 80): string {
-  return line.length <= max ? line : line.slice(0, max) + "…";
+  return line.length <= max ? line : `${line.slice(0, max)}…`;
 }
 
 const MAX_BYTES = 1_000_000;
@@ -499,13 +506,14 @@ async function editFileValidation(filePath: string): Promise<{ isErr: boolean; e
     if (sniff.includes(0)) {
       return { isErr: true, error: `File is binary: ${filePath}` };
     }
-  } catch (e: any) {
-    if (e.code === "ENOENT") {
+  } catch (e) {
+    const code = errorCode(e);
+    if (code === "ENOENT") {
       return { isErr: true, error: `File not found: ${filePath}` };
     }
     return {
       isErr: true,
-      error: `Failed to access file (${e.code || e.message}): ${filePath}`,
+      error: `Failed to access file (${code ?? errorMessage(e)}): ${filePath}`,
     };
   } finally {
     await fd?.close();
