@@ -1,4 +1,4 @@
-import type { AgentContext } from "./types.js";
+import type { AgentContext } from "../types.js";
 
 export const SYSTEM_PROMPT: string = `You are Agent Cody, an interactive CLI tool for software-engineering tasks.
 

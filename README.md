@@ -37,7 +37,9 @@ main.ts (entry)
 agent/ (orchestration layer)
     ├── loop.ts       — Agent loop: prompts, dispatches tools, tracks stats
     ├── types.ts      — AgentContext, ToolDefinition, ToolResult, TurnHooks
-    ├── prompt.ts     — System prompt and live task context snapshot
+    ├── prompt/      — System prompt and live task context snapshots
+        ├── prompt.ts
+        └── rubrik.ts
     ├── util.ts       — Wire-format conversion (ToolDefinition → ChatCompletionTool)
     ├── stats.ts      — SessionStats tracking and recording
     └── tools/        — Built-in tool implementations

@@ -108,7 +108,7 @@ export function validateState(params: State): StateValidationResult {
         field: "notes",
         reason: "Note cannot be empty after normalization",
       });
-    } else if (/[\u0000-\u001f\u007f]/.test(notes)) {
+    } else if (hasControlCharacters(notes)) {
       issues.push({
         field: "notes",
         reason: "Control characters are not allowed",
@@ -122,7 +122,7 @@ export function validateState(params: State): StateValidationResult {
         field: "decision",
         reason: "Decision cannot be empty after normalization",
       });
-    } else if (/[\u0000-\u001f\u007f]/.test(decision)) {
+    } else if (hasControlCharacters(decision)) {
       issues.push({
         field: "decision",
         reason: "Control characters are not allowed",
@@ -156,4 +156,10 @@ export function validateState(params: State): StateValidationResult {
 
 function normalize(value: string): string {
   return value.normalize("NFKC").replace(/\s+/g, " ").trim();
+}
+function hasControlCharacters(value: string): boolean {
+  return Array.from(value).some(character => {
+    const codePoint = character.codePointAt(0);
+    return codePoint !== undefined && (codePoint <= 0x1f || codePoint === 0x7f);
+  });
 }

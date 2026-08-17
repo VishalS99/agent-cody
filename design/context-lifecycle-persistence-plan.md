@@ -50,7 +50,7 @@ If plan and execution are later represented by the same `Agent`, reuse the same 
 
 ### 4. Preserve dynamic prompt injection
 
-Keep `buildContextSnapshot` and `buildRequestSystemPrompt` in `agent/prompt.ts`. `Agent.toLLMRequest()` must render the hydrated context on every request, so execution receives:
+Keep `buildContextSnapshot` and `buildRequestSystemPrompt` in `agent/prompt/prompt.ts`. `Agent.toLLMRequest()` must render the hydrated context on every request, so execution receives:
 
 - the preserved goal
 - action steps and statuses
@@ -75,7 +75,7 @@ Do not add a goal-read tool, parse `## Goal` headings, or force a provider `tool
 - `agent/tools/context/manager.ts:8-96` — existing mutation manager; add deep-copy snapshot/hydration utilities.
 - `agent/agent.ts:41-174, 196-279` — turn lifecycle, context update application, and new snapshot getter.
 - `agent/loop.ts:19-45` — context construction and `Agent` creation; add optional snapshot hydration at the host boundary.
-- `agent/prompt.ts:63-86` — dynamic snapshot rendering used by execution requests.
+- `agent/prompt/prompt.ts:63-86` — dynamic snapshot rendering used by execution requests.
 
 ## Verification
 

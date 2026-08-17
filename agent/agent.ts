@@ -5,7 +5,7 @@ import type { SessionStats } from "./stats.js";
 import { recordToolCall, recordLLMResponse } from "./stats.js";
 import { toWireTool } from "./util.js";
 import { applyContextUpdate } from "./tools/context/manager.js";
-import { buildRequestSystemPrompt } from "./prompt.js";
+import { buildRequestSystemPrompt } from "./prompt/prompt.js";
 import { logger } from "../config/logger.js";
 import type { ChatCompletionMessageFunctionToolCall, ChatCompletionChunk } from "openai/resources.js";
 import type { Messages } from "../schemas/messages.js";
