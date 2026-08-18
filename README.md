@@ -26,6 +26,7 @@ Agent Cody is a command-line AI agent that helps with software engineering tasks
 - **Session Statistics**: Real-time tracking of tool calls, success/failure rates, token usage, and latency
 - **Rate Limit Handling**: Graceful degradation on 429/503 responses
 - **Strict Type Safety**: Full TypeScript with strict mode, Zod schemas for all boundaries
+- **Automatic Context Compaction**: Maintains long-running sessions within a 1,050,000-token context budget using scheduled rubric checks every 20 tool-call rounds and forced summarization above 80% usage; preserves the task request and live task state while removing stale transcript and tool-action history
 
 ## Architecture
 
@@ -48,9 +49,7 @@ agent/ (orchestration layer)
         ├── edit_file.ts
         ├── grep.ts
         ├── file.ts
-        ├── bash_exec.ts   ← stub
-        └── context/     — Goal and live task state tools
-
+        └── context/     — Goal/state tools and automatic transcript compaction
 llm/ (transport layer)
     ├── client.ts     — LLMClient: transforms messages to OpenAI API format
     ├── types.ts      — ConfigSchema, OpenAICompatConfig, LLMRequest
@@ -66,6 +65,7 @@ schemas/messages.ts     — Message types (Role, Messages, ToolCall)
 - **Schema-driven boundaries**: All I/O uses Zod schemas for runtime validation
 - **Tool abstraction**: Tools define their own Zod parameters and an `execute` function; the loop handles dispatch and error handling uniformly
 - **Turn hooks**: `TurnHooks` exposes streaming, tool-call, usage, step-completion, and turn-end events without coupling the agent loop to presentation
+- **Context compaction**: The agent estimates prompt and transcript tokens after tool rounds. Every 20 tool-call rounds it asks a rubric model whether to `CONTINUE` or `COMPRESS`; when compression is selected, a summary replaces the old transcript while preserving the task request, goal, action steps, notes, decisions, current step, and files read. If estimated usage exceeds 80% of the 1,050,000-token budget, compaction is forced; summaries use a shorter prompt when usage is above 90%. Internal rubric and summary requests are temporary and their usage is tracked separately.
 - **Live task context**: Goals and action steps are initialized when assigned, while state, decisions, notes, and file tracking are updated as work progresses
 
 ## Getting Started
@@ -126,6 +126,8 @@ You'll see a prompt: `### Prompt:` — type your query and press Enter.
 `Agent.turn()` accepts optional `TurnHooks` callbacks for streamed deltas, tool-call start and result events, usage updates, completed action steps, and turn completion. The loop initializes the conversation with the seven registered tools: `ls`, `read_file`, `simple_grep`, `edit_file`, `files`, `goals`, and `state`.
 
 Live task context is kept alongside conversation messages. The `goals` tool initializes the current goal and ordered action steps; the `state` tool records notes, decisions, completed steps, and files read. The current context snapshot is added to each request system prompt, and successful context updates are applied after tool execution.
+
+Context compaction runs automatically after tool-call rounds and requires no user action. The thresholds are defined in `agent/constants.ts`: `CONTEXT_BUDGET_TOKENS` is `1_050_000`, scheduled checks run every `COMPACTION_TURN_THRESHOLD` (`20`) rounds, forced compaction starts above 80% of the budget, and `COMPACTION_NEAR_LIMIT_RATIO` (`0.9`) selects the shorter summary prompt near the limit. `TurnHooks.onCompactionStart` and `onCompactionApplied` expose compaction status and the generated summary to the CLI; failures leave the existing context intact and execution continues.
 
 ### Adding a New Tool
 
