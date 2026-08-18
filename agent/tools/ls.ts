@@ -1,8 +1,8 @@
-import * as z from "zod";
-import type { ToolDefinition } from "../types.js";
 import * as fs from "node:fs/promises";
-import { logger } from "../../config/logger.js";
 import * as nodePath from "node:path";
+import * as z from "zod";
+import { logger } from "../../config/logger.js";
+import type { ToolDefinition } from "../types.js";
 import { allowedRoot, resolveInsideRoot } from "./fs_guard.js";
 
 const MAX_ENTRIES = 200;

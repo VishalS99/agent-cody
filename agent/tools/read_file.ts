@@ -1,9 +1,9 @@
-import * as z from "zod";
-import type { ToolDefinition, ToolResult } from "../types.js";
+import * as fs from "node:fs";
 import * as fsProm from "node:fs/promises";
 import readline from "node:readline";
-import * as fs from "node:fs";
+import * as z from "zod";
 import { logger } from "../../config/logger.js";
+import type { ToolDefinition, ToolResult } from "../types.js";
 import { resolveInsideRoot } from "./fs_guard.js";
 
 const MAX_LINES = 1000;

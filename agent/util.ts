@@ -1,6 +1,6 @@
 import type { ChatCompletionTool } from "openai/resources";
-import type { ToolDefinition } from "./types.js";
 import * as z from "zod";
+import type { ToolDefinition } from "./types.js";
 
 export function toWireTool<T extends z.ZodType>(t: ToolDefinition<T>): ChatCompletionTool {
   return {

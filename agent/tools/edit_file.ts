@@ -18,9 +18,10 @@
  * Response: success/op-failure -> { path, edits: [{ index, function, error? }] } (input order,
  * error only on the single failing op); file-level failure -> { path, error }.
  */
+
+import * as fsProm from "node:fs/promises";
 import * as z from "zod";
 import type { ToolDefinition, ToolResult } from "../types.js";
-import * as fsProm from "node:fs/promises";
 import { errorCode, errorMessage } from "../util.js";
 import { resolveInsideRoot } from "./fs_guard.js";
 

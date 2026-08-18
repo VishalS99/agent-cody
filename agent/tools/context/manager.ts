@@ -22,6 +22,21 @@ function applyGoalUpdate(context: AgentContext, goal: string, steps: string[]): 
 
   const state = ensureState(context);
   state.current_step = steps.length > 0 ? 0 : -1;
+
+  const latestRequest = latestUserRequest(context);
+  if (latestRequest !== undefined) {
+    context.task_request = latestRequest;
+  }
+}
+
+function latestUserRequest(context: AgentContext): string | undefined {
+  for (let index = context.messages.length - 1; index >= 0; index--) {
+    const message = context.messages[index];
+    if (message?.role === "user" && message.content.trim() !== "") {
+      return message.content;
+    }
+  }
+  return undefined;
 }
 
 function applyStateUpdate(context: AgentContext, update: Extract<ContextUpdate, { type: "update_state" }>): void {
@@ -60,10 +75,10 @@ function applyStateUpdate(context: AgentContext, update: Extract<ContextUpdate, 
   const nextIndex = completedIndex + 1;
   if (nextIndex < steps.length) {
     const nextStep = steps[nextIndex];
-    // if (!nextStep) {
-    // throw new Error(`Invalid next step index: ${nextIndex}`);
-    // }
-    nextStep!.status = "current";
+    if (!nextStep) {
+      throw new Error(`Invalid next step index: ${nextIndex}`);
+    }
+    nextStep.status = "current";
     state.current_step = nextIndex;
   } else {
     state.current_step = -1;

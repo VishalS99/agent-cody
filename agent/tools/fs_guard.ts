@@ -1,5 +1,5 @@
-import * as nodePath from "node:path";
 import * as fsProm from "node:fs/promises";
+import * as nodePath from "node:path";
 
 /**
  * Filesystem containment guard: resolves a user-supplied path against the

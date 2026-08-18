@@ -1,21 +1,34 @@
+import type { ChatCompletionChunk, ChatCompletionMessageFunctionToolCall } from "openai/resources.js";
+import { logger } from "../config/logger.js";
 import type { ILLMClient } from "../llm/client.js";
 import type { LLMRequest } from "../llm/types.js";
-import type { AgentContext, ToolDefinition, ToolResult, TurnHooks, TurnSummary, ToolAction } from "./types.js";
-import type { SessionStats } from "./stats.js";
-import { recordToolCall, recordLLMResponse } from "./stats.js";
-import { toWireTool } from "./util.js";
-import { applyContextUpdate } from "./tools/context/manager.js";
-import { buildRequestSystemPrompt } from "./prompt.js";
-import { logger } from "../config/logger.js";
-import type { ChatCompletionMessageFunctionToolCall, ChatCompletionChunk } from "openai/resources.js";
 import type { Messages } from "../schemas/messages.js";
-const MAX_TOOL_ITERATIONS = 50;
+import {
+  COMPACTION_NEAR_LIMIT_RATIO,
+  COMPACTION_TURN_THRESHOLD,
+  CONTEXT_BUDGET_TOKENS,
+  EMPTY_RESPONSE_CONTINUATION_PROMPT,
+  MAX_EMPTY_CONTINUATIONS,
+  MAX_TOOL_ITERATIONS,
+  RATE_LIMIT_STATUS,
+  SERVICE_UNAVAILABLE_STATUS,
+} from "./constants.js";
+import { buildRequestSystemPrompt } from "./prompt/prompt.js";
+import type { SessionStats } from "./stats.js";
+import { recordContextEstimate, recordInternalUsage, recordLLMResponse, recordToolCall } from "./stats.js";
+import type { SummaryResult } from "./tools/context/compact.js";
+import { buildLeanContext, compactContext, requestSummary } from "./tools/context/compact.js";
+import { applyContextUpdate } from "./tools/context/manager.js";
+import type { AgentContext, ToolAction, ToolDefinition, ToolResult, TurnHooks, TurnSummary } from "./types.js";
+import { toWireTool } from "./util.js";
 
 export class Agent {
   private client: ILLMClient;
   private agentContext: AgentContext;
   private stats: SessionStats;
   private model: string;
+  private toolRoundCount: number = 0;
+  private emptyContinuationCount = 0;
 
   constructor(client: ILLMClient, context: AgentContext, stats: SessionStats, model = "") {
     this.client = client;
@@ -26,6 +39,7 @@ export class Agent {
 
   async turn(prompt: string, hooks?: TurnHooks): Promise<TurnSummary> {
     const startTime = performance.now();
+    this.emptyContinuationCount = 0;
     this.agentContext.messages.push({ role: "user", content: prompt });
 
     let itr = 0;
@@ -33,12 +47,12 @@ export class Agent {
     let toolCallCount = 0;
     while (itr++ < MAX_TOOL_ITERATIONS) {
       const llmStart = performance.now();
+      const iterationStart = reply.length;
       const toolCalls: ChatCompletionMessageFunctionToolCall[] = [];
       let finishReason: ChatCompletionChunk.Choice["finish_reason"] | undefined;
       let usage: ChatCompletionChunk["usage"] | undefined;
       try {
-        const stream = await this.client.sendSRequest(this.toLLMRequest());
-        const replyStart = reply.length;
+        const stream = await this.client.sendSRequest(toLLMRequest(this.agentContext));
         for await (const chunk of stream) {
           const delta = chunk.choices[0]?.delta;
           const piece = delta?.content ?? "";
@@ -68,10 +82,10 @@ export class Agent {
           }
           if (chunk.usage) usage = chunk.usage;
         }
-        if (reply.length > replyStart) hooks?.onDelta?.("\n");
+        if (reply.length > iterationStart) hooks?.onDelta?.("\n");
       } catch (err) {
         const status = (err as { status?: number } | undefined)?.status;
-        const isRateLimit = status === 429 || status === 503;
+        const isRateLimit = status === RATE_LIMIT_STATUS || status === SERVICE_UNAVAILABLE_STATUS;
         logger.error(
           {
             event: "llm_request_failed",
@@ -107,6 +121,23 @@ export class Agent {
         "Model response",
       );
       if (toolCalls.length === 0 || finishReason !== "tool_calls") {
+        const iterationText = reply.slice(iterationStart);
+        if (
+          iterationText.trim() === "" &&
+          this.isTaskIncomplete() &&
+          this.emptyContinuationCount < MAX_EMPTY_CONTINUATIONS
+        ) {
+          this.emptyContinuationCount++;
+          this.agentContext.messages.push({
+            role: "user",
+            content: EMPTY_RESPONSE_CONTINUATION_PROMPT,
+          });
+          logger.warn(
+            { event: "empty_response_continuation", attempt: this.emptyContinuationCount },
+            "Model returned no content while action steps remain; continuing",
+          );
+          continue;
+        }
         this.agentContext.messages.push({ role: "assistant", content: reply });
         break;
       }
@@ -141,6 +172,9 @@ export class Agent {
         );
       }
 
+      this.toolRoundCount++;
+      await this.runOptionalCompaction(hooks);
+
       if (itr === MAX_TOOL_ITERATIONS) {
         logger.warn(
           { event: "tool_loop_cap_reached", iterations: MAX_TOOL_ITERATIONS },
@@ -154,42 +188,108 @@ export class Agent {
     return { reply, toolCalls: toolCallCount, durationMs };
   }
 
-  hydrateToolMessages(): Messages[] {
-    const toolMap = new Map((this.agentContext.tool_actions_taken ?? []).map(action => [action.tool_call_id, action]));
-
-    return this.agentContext.messages.map(msg => {
-      if (msg.role !== "tool") {
-        return msg;
-      }
-
-      const tool = toolMap.get(msg.tool_call_id ?? "");
-      if (!tool) {
-        throw new Error(`Missing stored tool action for call ${msg.tool_call_id ?? "(unknown)"}`);
-      }
-
-      return { ...msg, content: tool.content };
-    });
+  getStats(): SessionStats {
+    return this.stats;
   }
 
-  toLLMRequest(): LLMRequest {
-    // perform tool hydration
-    const hydratedMessages = this.hydrateToolMessages();
-    const req: LLMRequest = { messages: hydratedMessages };
-
-    if (this.agentContext.system_prompt) {
-      req.systemPrompt = buildRequestSystemPrompt(this.agentContext);
-    }
-    if (this.agentContext.available_tools && this.agentContext.available_tools.length > 0) {
-      req.tools = this.agentContext.available_tools.map(toWireTool);
-    }
-    return req;
+  getAgentContext(): AgentContext {
+    return this.agentContext;
   }
 
-  findToolDefinition(toolName: string): ToolDefinition | undefined {
+  private async runOptionalCompaction(hooks?: TurnHooks): Promise<void> {
+    const nearLimit = this.stats.currentContextTokens > COMPACTION_NEAR_LIMIT_RATIO * CONTEXT_BUDGET_TOKENS;
+
+    if (this.stats.currentContextTokens > 0.8 * CONTEXT_BUDGET_TOKENS) {
+      hooks?.onCompactionStart?.("forced");
+      const summaryResult: SummaryResult = await requestSummary(
+        buildLeanContext(this.agentContext),
+        this.client,
+        nearLimit,
+      );
+      this.stats = recordInternalUsage(
+        this.stats,
+        summaryResult.ok ? summaryResult.usage : { inputTokens: 0, outputTokens: 0, durationMs: 0 },
+      );
+      if (summaryResult.ok) {
+        this.replaceTranscript(summaryResult.content);
+        this.toolRoundCount = 0;
+        this.stats = recordContextEstimate(this.stats, this.estimateContextTokens(this.agentContext));
+        hooks?.onCompactionApplied?.(summaryResult.content, "forced");
+        logger.info(
+          { event: "forced_compaction", context_tokens: this.stats.currentContextTokens },
+          "Forced context compaction applied",
+        );
+      } else {
+        logger.warn(
+          { event: "forced_compaction_failed", error: summaryResult.error },
+          "Forced context compaction failed",
+        );
+      }
+      return;
+    }
+
+    if (this.toolRoundCount % COMPACTION_TURN_THRESHOLD === 0) {
+      hooks?.onCompactionStart?.("scheduled");
+      try {
+        const res = await compactContext(this.agentContext, this.client, nearLimit);
+        if (res.usage) {
+          this.stats = recordInternalUsage(this.stats, res.usage);
+        }
+        logger.info(
+          { event: "compaction_rubric", status: res.status, ...(res.error ? { error: res.error } : {}) },
+          "Compaction rubric decision",
+        );
+        if (res.status === "COMPRESS") {
+          this.agentContext = res.context;
+          this.toolRoundCount = 0;
+          this.stats = recordContextEstimate(this.stats, this.estimateContextTokens(this.agentContext));
+          const appliedSummary = this.agentContext.messages[this.agentContext.messages.length - 1]?.content ?? "";
+          hooks?.onCompactionApplied?.(appliedSummary, "scheduled");
+          logger.info(
+            { event: "compaction_applied", context_tokens: this.stats.currentContextTokens },
+            "Context compaction applied — history summarized; continuing from the current step",
+          );
+        }
+      } catch (error) {
+        logger.warn(
+          { event: "compaction_rubric_error", error: error instanceof Error ? error.message : String(error) },
+          "Compaction rubric errored; continuing with existing context",
+        );
+      }
+    }
+  }
+
+  private replaceTranscript(summary: string): void {
+    const userMessage = this.agentContext.messages.find(m => m.role === "user");
+    const taskRequest =
+      this.agentContext.task_request ?? (typeof userMessage?.content === "string" ? userMessage.content : "");
+    this.agentContext = {
+      ...this.agentContext,
+      messages: [
+        { role: "user", content: taskRequest },
+        { role: "assistant", content: summary },
+      ],
+      tool_actions_taken: [],
+    };
+  }
+
+  private estimateContextTokens(context: AgentContext): number {
+    const system = buildRequestSystemPrompt(context);
+    const transcript = context.messages
+      .map(message => `${message.role}:${message.content ?? ""}${message.tool_call_id ?? ""}`)
+      .join("\n");
+    return Math.max(1, Math.round((system.length + transcript.length) / 4));
+  }
+
+  private isTaskIncomplete(): boolean {
+    return (this.agentContext.action_steps ?? []).some(step => step.status !== "completed");
+  }
+
+  private findToolDefinition(toolName: string): ToolDefinition | undefined {
     return this.agentContext.available_tools?.find(t => t.function.name === toolName);
   }
 
-  async dispatchToolCall(call: ChatCompletionMessageFunctionToolCall, hooks?: TurnHooks): Promise<ToolResult> {
+  private async dispatchToolCall(call: ChatCompletionMessageFunctionToolCall, hooks?: TurnHooks): Promise<ToolResult> {
     const tool = this.findToolDefinition(call.function.name);
 
     if (!tool) {
@@ -293,8 +393,38 @@ export class Agent {
       name: toolName,
     });
   }
+}
 
-  getStats(): SessionStats {
-    return this.stats;
+export function hydrateToolMessages(context: AgentContext): Messages[] {
+  const toolMap = new Map((context.tool_actions_taken ?? []).map(action => [action.tool_call_id, action]));
+
+  return context.messages.map(msg => {
+    if (msg.role !== "tool") {
+      return msg;
+    }
+
+    const tool = toolMap.get(msg.tool_call_id ?? "");
+    if (!tool) {
+      throw new Error(`Missing stored tool action for call ${msg.tool_call_id ?? "(unknown)"}`);
+    }
+
+    return { ...msg, content: tool.content };
+  });
+}
+
+export function toLLMRequest(context: AgentContext, isTempReq: boolean = false): LLMRequest {
+  const hydratedMessages = hydrateToolMessages(context);
+  const req: LLMRequest = { messages: hydratedMessages };
+
+  if (context.system_prompt) {
+    req.systemPrompt = buildRequestSystemPrompt(context);
   }
+
+  if (isTempReq) return req;
+  const availableTools = context.available_tools;
+  if (availableTools && availableTools.length > 0) {
+    req.tools = availableTools.map(toWireTool);
+  }
+
+  return req;
 }

@@ -9,8 +9,14 @@ export interface SessionStats {
   totalInputTokens: number;
   totalOutputTokens: number;
   totalResponseDurationMs: number;
-  currentContextSize: number;
+  currentContextTokens: number;
 }
+
+export type InternalUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  durationMs: number;
+};
 
 export function createSessionStats(): SessionStats {
   return {
@@ -24,7 +30,7 @@ export function createSessionStats(): SessionStats {
     totalInputTokens: 0,
     totalOutputTokens: 0,
     totalResponseDurationMs: 0,
-    currentContextSize: 0,
+    currentContextTokens: 0,
   };
 }
 
@@ -64,7 +70,24 @@ export function recordLLMResponse(
     totalInputTokens: stats.totalInputTokens + resp.inputTokens,
     totalOutputTokens: stats.totalOutputTokens + resp.outputTokens,
     totalResponseDurationMs: stats.totalResponseDurationMs + resp.durationMs,
-    currentContextSize: resp.inputTokens,
+    currentContextTokens: resp.inputTokens,
+  };
+}
+
+export function recordContextEstimate(stats: SessionStats, estimate: number): SessionStats {
+  return {
+    ...stats,
+    currentContextTokens: estimate,
+  };
+}
+
+export function recordInternalUsage(stats: SessionStats, usage: InternalUsage): SessionStats {
+  return {
+    ...stats,
+    totalLLMCalls: stats.totalLLMCalls + 1,
+    totalInputTokens: stats.totalInputTokens + usage.inputTokens,
+    totalOutputTokens: stats.totalOutputTokens + usage.outputTokens,
+    totalResponseDurationMs: stats.totalResponseDurationMs + usage.durationMs,
   };
 }
 

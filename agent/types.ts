@@ -1,6 +1,6 @@
+import type * as z from "zod";
 import type { Messages, ToolCall } from "../schemas/messages.js";
 import type { SessionStats } from "./stats.js";
-import type * as z from "zod";
 // Agent orchestration layer: owns the tool-call/tool-definition types and
 // the conversation context. Imports direction-only from schemas/.
 
@@ -12,6 +12,7 @@ export interface AgentContext {
   action_steps?: ActionStep[];
   goal?: string;
   state?: ContextState;
+  task_request?: string;
 }
 
 export interface ContextState {
@@ -70,6 +71,8 @@ export interface TurnHooks {
   onToolCallStart?: (call: ToolCall) => void;
   onToolCallResult?: (result: ToolResult) => void;
   onStepCompleted?: (step: ActionStep, index: number, nextStep?: ActionStep) => void;
+  onCompactionStart?: (kind: "forced" | "scheduled") => void;
+  onCompactionApplied?: (summary: string, kind: "forced" | "scheduled") => void;
   onUsage?: (usage: SessionStats) => void;
   onTurnEnd?: (reply: string, toolCalls: number) => void;
 }
