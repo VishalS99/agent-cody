@@ -12,6 +12,7 @@ export interface AgentContext {
   action_steps?: ActionStep[];
   goal?: string;
   state?: ContextState;
+  task_request?: string;
 }
 
 export interface ContextState {

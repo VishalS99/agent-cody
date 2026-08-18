@@ -13,7 +13,7 @@ Compaction must reduce stale transcript history without losing the active task:
 
 ```text
 normal tool-call rounds
-  -> every N rounds: append rubric probe
+  -> every N rounds: run rubric probe
   -> COMPRESS or CONTINUE
   -> COMPRESS: request summary and replace old transcript
 
@@ -25,6 +25,18 @@ context reaches 80% effective budget
 
 The rubric is for adaptive timing. The 80% path is defensive overflow
 prevention and never asks the model whether to continue.
+
+## Rubric Probe (Harness-Initiated)
+
+Compaction is not a tool the agent chooses to call. The harness schedules the
+rubric probe after every `N` completed tool-call rounds, and the model answers
+the rubric with `COMPRESS` or `CONTINUE`. The agent and harness together decide
+compaction: the harness owns timing, probing, and transcript replacement; the
+model owns the adaptivity judgment.
+
+The probe's internal rubric and summary requests are not loop iterations, do
+not increment the tool-round counter, and are not persisted as ordinary
+messages or tool actions. No `compact_context` tool is exposed to the agent.
 
 ## Context Units
 
@@ -62,6 +74,10 @@ The rubric should evaluate:
 - Whether a summary can preserve the information needed to continue
 
 Normal workspace tools must be disabled during the rubric request.
+
+Prefer constructing the rubric request from a temporary message copy. If the
+rubric prompt and response are appended to a working array, remove both before
+continuing; neither belongs in persistent `messages` or `tool_actions_taken`.
 
 ### `CONTINUE`
 
@@ -229,13 +245,12 @@ Compaction never removes or rewrites:
 The dynamic system-context snapshot continues to expose these fields after
 compaction.
 
-## Proposed Components
+## Implementation (on `Agent`)
 
-### `CompactionManager`
+The compaction controller is implemented directly on the `Agent`, not as a
+separate manager class. It is responsible for:
 
-Responsible for:
-
-- Counting tool-call rounds
+- Counting tool-call rounds (`toolRoundCount`)
 - Measuring the active context
 - Selecting scheduled versus forced compaction
 - Issuing rubric requests
@@ -244,8 +259,6 @@ Responsible for:
 - Replacing transcript history
 - Removing stale tool actions
 - Resetting counters and recalculating context size
-
-### `Agent` integration
 
 After each completed tool-call round:
 
@@ -261,8 +274,8 @@ else if round count % N == 0:
     run rubric
 ```
 
-Compaction requests must bypass the normal tool loop and must not be persisted
-as ordinary conversation turns.
+Internal rubric and summary requests must bypass the normal tool loop and must
+not be persisted as ordinary conversation turns.
 
 ## Failure Handling
 
@@ -275,6 +288,7 @@ as ordinary conversation turns.
   and a bounded summary output budget.
 
 ## Acceptance Criteria
+- The harness schedules the rubric probe; the model answers `COMPRESS` or `CONTINUE`.
 
 - `CONTINUE` leaves persistent context unchanged.
 - Scheduled `COMPRESS` removes old transcript and tool actions.
