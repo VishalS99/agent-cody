@@ -1,7 +1,7 @@
 import { stdin as input, stdout as output } from "node:process";
 import * as readline from "node:readline/promises";
 import { config } from "../config/env.js";
-import { logger, logLedger, visualLines } from "../config/logger.js";
+import { logger, logLedger, visualLines, writeLedgerLine } from "../config/logger.js";
 import { LLMClient } from "../llm/client.js";
 import { Agent } from "./agent.js";
 import {
@@ -101,11 +101,11 @@ export async function runLoop(): Promise<void> {
           if (nextStep) process.stdout.write(`→ Next: ${ANSI_BOLD_YELLOW}${nextStep.action}${ANSI_RESET}\n`);
         },
         onCompactionStart: kind => {
-          process.stdout.write(kind === "forced" ? FORCED_COMPACTION_NOTICE : SCHEDULED_COMPACTION_NOTICE);
+          writeLedgerLine(kind === "forced" ? FORCED_COMPACTION_NOTICE : SCHEDULED_COMPACTION_NOTICE);
         },
         onCompactionApplied: summary => {
           if (summary === "") return;
-          process.stdout.write(`${ANSI_DIM_WHITE_ITALIC}${summary}${ANSI_RESET}\n`);
+          writeLedgerLine(`${ANSI_DIM_WHITE_ITALIC}${summary}${ANSI_RESET}\n`);
         },
       });
 

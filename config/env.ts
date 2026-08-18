@@ -1,5 +1,5 @@
-import { ConfigSchema } from "../llm/types.js";
 import type { OpenAICompatConfig } from "../llm/types.js";
+import { ConfigSchema } from "../llm/types.js";
 
 const requiredEnv = (name: string): string => {
   const value = process.env[name]?.trim();

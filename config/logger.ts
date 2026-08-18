@@ -1,6 +1,6 @@
+import { Writable } from "node:stream";
 import pino, { type Logger } from "pino";
 import pretty from "pino-pretty";
-import { Writable } from "node:stream";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -35,6 +35,16 @@ const ledgerStream = new Writable({
     cb();
   },
 });
+
+/**
+ * Write a plain (non-pino) UI line that is also recorded in the logLedger, so
+ * terminal prints made mid-turn survive the reply re-render instead of being
+ * swept into the erase region.
+ */
+export function writeLedgerLine(text: string): void {
+  logLedger.push({ lines: visualLines(text), text });
+  process.stdout.write(text);
+}
 
 // Create a synchronous pretty stream for local development
 const prettyStream = isDev
