@@ -1,16 +1,8 @@
+import type { ChatCompletionChunk, ChatCompletionMessageFunctionToolCall } from "openai/resources.js";
+import { logger } from "../config/logger.js";
 import type { ILLMClient } from "../llm/client.js";
 import type { LLMRequest } from "../llm/types.js";
-import type { AgentContext, ToolDefinition, ToolResult, TurnHooks, TurnSummary, ToolAction } from "./types.js";
-import type { SessionStats } from "./stats.js";
-import { recordToolCall, recordLLMResponse, recordContextEstimate, recordInternalUsage } from "./stats.js";
-import { toWireTool } from "./util.js";
-import { applyContextUpdate } from "./tools/context/manager.js";
-import { buildRequestSystemPrompt } from "./prompt/prompt.js";
-import { logger } from "../config/logger.js";
-import type { ChatCompletionMessageFunctionToolCall, ChatCompletionChunk } from "openai/resources.js";
 import type { Messages } from "../schemas/messages.js";
-import { requestSummary, buildLeanContext, compactContext } from "./tools/context/compact.js";
-import type { SummaryResult } from "./tools/context/compact.js";
 import {
   COMPACTION_NEAR_LIMIT_RATIO,
   COMPACTION_TURN_THRESHOLD,
@@ -21,6 +13,14 @@ import {
   RATE_LIMIT_STATUS,
   SERVICE_UNAVAILABLE_STATUS,
 } from "./constants.js";
+import { buildRequestSystemPrompt } from "./prompt/prompt.js";
+import type { SessionStats } from "./stats.js";
+import { recordContextEstimate, recordInternalUsage, recordLLMResponse, recordToolCall } from "./stats.js";
+import type { SummaryResult } from "./tools/context/compact.js";
+import { buildLeanContext, compactContext, requestSummary } from "./tools/context/compact.js";
+import { applyContextUpdate } from "./tools/context/manager.js";
+import type { AgentContext, ToolAction, ToolDefinition, ToolResult, TurnHooks, TurnSummary } from "./types.js";
+import { toWireTool } from "./util.js";
 
 export class Agent {
   private client: ILLMClient;

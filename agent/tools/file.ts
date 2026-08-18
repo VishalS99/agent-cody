@@ -11,9 +11,10 @@
  * in `errors`. Paths are processed independently — one bad path does not block
  * the rest.
  */
-import * as z from "zod";
+
 import * as fsProm from "node:fs/promises";
 import * as nodePath from "node:path";
+import * as z from "zod";
 import type { ToolDefinition, ToolResult } from "../types.js";
 import { errorCode, errorMessage } from "../util.js";
 import { resolveInsideRoot } from "./fs_guard.js";

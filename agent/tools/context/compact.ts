@@ -21,15 +21,15 @@
  * are never persisted as conversation messages or tool actions.
  */
 
-import { config } from "../../../config/env.js";
-import { LLMClient, type ILLMClient } from "../../../llm/client.js";
 import type OpenAI from "openai";
-import { toLLMRequest } from "../../agent.js";
-import type { AgentContext } from "../../types.js";
-import { COMPACTION_RUBRIC_PROMPT } from "../../prompt/rubric.js";
-import { SUMMARY_PROMPT, SHORT_SUMMARY_PROMPT } from "../../prompt/summarize.js";
+import { config } from "../../../config/env.js";
 import { logger } from "../../../config/logger.js";
+import { type ILLMClient, LLMClient } from "../../../llm/client.js";
+import { toLLMRequest } from "../../agent.js";
+import { COMPACTION_RUBRIC_PROMPT } from "../../prompt/rubric.js";
+import { SHORT_SUMMARY_PROMPT, SUMMARY_PROMPT } from "../../prompt/summarize.js";
 import type { InternalUsage } from "../../stats.js";
+import type { AgentContext } from "../../types.js";
 
 export type CompactContextResult = {
   context: AgentContext;

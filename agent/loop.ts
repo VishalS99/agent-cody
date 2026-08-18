@@ -1,20 +1,9 @@
-import { buildSystemPrompt } from "./prompt/prompt.js";
-import type { AgentContext } from "./types.js";
-import * as readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { LLMClient } from "../llm/client.js";
+import * as readline from "node:readline/promises";
 import { config } from "../config/env.js";
 import { logger, logLedger, visualLines } from "../config/logger.js";
-import { lsToolDefinition } from "./tools/ls.js";
-import { readFileToolDefinition } from "./tools/read_file.js";
-import { grepToolDefinition } from "./tools/grep.js";
+import { LLMClient } from "../llm/client.js";
 import { Agent } from "./agent.js";
-import { editFileToolDefinition } from "./tools/edit_file.js";
-import { fileToolDefinition } from "./tools/file.js";
-import { createSessionStats } from "./stats.js";
-import { allowedRoot } from "./tools/fs_guard.js";
-import { goalsToolDefinition } from "./tools/context/goals.js";
-import { stateToolDefinition } from "./tools/context/state.js";
 import {
   ANSI_BOLD_YELLOW,
   ANSI_ITALIC_GREEN,
@@ -27,6 +16,17 @@ import {
   SERVICE_UNAVAILABLE_STATUS,
   TOOLS_CALLED_ANNOTATION,
 } from "./constants.js";
+import { buildSystemPrompt } from "./prompt/prompt.js";
+import { createSessionStats } from "./stats.js";
+import { goalsToolDefinition } from "./tools/context/goals.js";
+import { stateToolDefinition } from "./tools/context/state.js";
+import { editFileToolDefinition } from "./tools/edit_file.js";
+import { fileToolDefinition } from "./tools/file.js";
+import { allowedRoot } from "./tools/fs_guard.js";
+import { grepToolDefinition } from "./tools/grep.js";
+import { lsToolDefinition } from "./tools/ls.js";
+import { readFileToolDefinition } from "./tools/read_file.js";
+import type { AgentContext } from "./types.js";
 
 async function buildAgentContext(): Promise<AgentContext> {
   const root = await allowedRoot();

@@ -1,6 +1,6 @@
+import type * as z from "zod";
 import type { Messages, ToolCall } from "../schemas/messages.js";
 import type { SessionStats } from "./stats.js";
-import type * as z from "zod";
 // Agent orchestration layer: owns the tool-call/tool-definition types and
 // the conversation context. Imports direction-only from schemas/.
 

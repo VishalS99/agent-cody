@@ -1,9 +1,9 @@
-import * as z from "zod";
-import type { ToolDefinition } from "../types.js";
-import { logger } from "../../config/logger.js";
-import * as nodePath from "node:path";
 import * as fs from "node:fs/promises";
+import * as nodePath from "node:path";
 import * as fastGlob from "fast-glob";
+import * as z from "zod";
+import { logger } from "../../config/logger.js";
+import type { ToolDefinition } from "../types.js";
 import { resolveInsideRoot } from "./fs_guard.js";
 
 export const grepSchema = z.object({
