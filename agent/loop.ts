@@ -6,13 +6,16 @@ import { LLMClient } from "../llm/client.js";
 import { Agent } from "./agent.js";
 import {
   ANSI_BOLD_YELLOW,
+  ANSI_DIM_WHITE_ITALIC,
   ANSI_ITALIC_GREEN,
   ANSI_RESET,
   CLI_EXIT_COMMAND,
   CLI_INPUT_PROMPT,
   DEFAULT_SCREEN_ROWS,
+  FORCED_COMPACTION_NOTICE,
   RATE_LIMIT_STATUS,
   REPLY_PREFIX,
+  SCHEDULED_COMPACTION_NOTICE,
   SERVICE_UNAVAILABLE_STATUS,
   TOOLS_CALLED_ANNOTATION,
 } from "./constants.js";
@@ -96,6 +99,13 @@ export async function runLoop(): Promise<void> {
         onStepCompleted: (step, index, nextStep) => {
           process.stdout.write(`\n✓ Step ${index + 1} completed: ${ANSI_ITALIC_GREEN}${step.action}${ANSI_RESET}\n`);
           if (nextStep) process.stdout.write(`→ Next: ${ANSI_BOLD_YELLOW}${nextStep.action}${ANSI_RESET}\n`);
+        },
+        onCompactionStart: kind => {
+          process.stdout.write(kind === "forced" ? FORCED_COMPACTION_NOTICE : SCHEDULED_COMPACTION_NOTICE);
+        },
+        onCompactionApplied: summary => {
+          if (summary === "") return;
+          process.stdout.write(`${ANSI_DIM_WHITE_ITALIC}${summary}${ANSI_RESET}\n`);
         },
       });
 

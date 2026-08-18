@@ -71,6 +71,8 @@ export interface TurnHooks {
   onToolCallStart?: (call: ToolCall) => void;
   onToolCallResult?: (result: ToolResult) => void;
   onStepCompleted?: (step: ActionStep, index: number, nextStep?: ActionStep) => void;
+  onCompactionStart?: (kind: "forced" | "scheduled") => void;
+  onCompactionApplied?: (summary: string, kind: "forced" | "scheduled") => void;
   onUsage?: (usage: SessionStats) => void;
   onTurnEnd?: (reply: string, toolCalls: number) => void;
 }

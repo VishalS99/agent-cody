@@ -173,7 +173,7 @@ export class Agent {
       }
 
       this.toolRoundCount++;
-      await this.runOptionalCompaction();
+      await this.runOptionalCompaction(hooks);
 
       if (itr === MAX_TOOL_ITERATIONS) {
         logger.warn(
@@ -196,10 +196,11 @@ export class Agent {
     return this.agentContext;
   }
 
-  private async runOptionalCompaction(): Promise<void> {
+  private async runOptionalCompaction(hooks?: TurnHooks): Promise<void> {
     const nearLimit = this.stats.currentContextTokens > COMPACTION_NEAR_LIMIT_RATIO * CONTEXT_BUDGET_TOKENS;
 
     if (this.stats.currentContextTokens > 0.8 * CONTEXT_BUDGET_TOKENS) {
+      hooks?.onCompactionStart?.("forced");
       const summaryResult: SummaryResult = await requestSummary(
         buildLeanContext(this.agentContext),
         this.client,
@@ -213,6 +214,7 @@ export class Agent {
         this.replaceTranscript(summaryResult.content);
         this.toolRoundCount = 0;
         this.stats = recordContextEstimate(this.stats, this.estimateContextTokens(this.agentContext));
+        hooks?.onCompactionApplied?.(summaryResult.content, "forced");
         logger.info(
           { event: "forced_compaction", context_tokens: this.stats.currentContextTokens },
           "Forced context compaction applied",
@@ -227,6 +229,7 @@ export class Agent {
     }
 
     if (this.toolRoundCount % COMPACTION_TURN_THRESHOLD === 0) {
+      hooks?.onCompactionStart?.("scheduled");
       try {
         const res = await compactContext(this.agentContext, this.client, nearLimit);
         if (res.usage) {
@@ -240,6 +243,12 @@ export class Agent {
           this.agentContext = res.context;
           this.toolRoundCount = 0;
           this.stats = recordContextEstimate(this.stats, this.estimateContextTokens(this.agentContext));
+          const appliedSummary = this.agentContext.messages[this.agentContext.messages.length - 1]?.content ?? "";
+          hooks?.onCompactionApplied?.(appliedSummary, "scheduled");
+          logger.info(
+            { event: "compaction_applied", context_tokens: this.stats.currentContextTokens },
+            "Context compaction applied — history summarized; continuing from the current step",
+          );
         }
       } catch (error) {
         logger.warn(

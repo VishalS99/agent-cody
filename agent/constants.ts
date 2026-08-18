@@ -10,10 +10,13 @@ export const RATE_LIMIT_STATUS = 429;
 export const SERVICE_UNAVAILABLE_STATUS = 503;
 
 export const CLI_INPUT_PROMPT = "\n\x1b[1m\x1b[94m\x1b[100m cody> \x1b[0m ";
+export const FORCED_COMPACTION_NOTICE = "\n⚠ Context is approaching the budget — running forced compaction…\n";
+export const SCHEDULED_COMPACTION_NOTICE = "\n→ Running scheduled compaction check…\n";
 export const CLI_EXIT_COMMAND = "exit";
 export const REPLY_PREFIX = "> ";
 export const DEFAULT_SCREEN_ROWS = 24;
 export const TOOLS_CALLED_ANNOTATION = "\x1b[2m(tools were called)\x1b[0m\n";
 export const ANSI_ITALIC_GREEN = "\x1b[3;32m";
 export const ANSI_BOLD_YELLOW = "\x1b[1;33m";
+export const ANSI_DIM_WHITE_ITALIC = "\x1b[2;37;3m";
 export const ANSI_RESET = "\x1b[0m";
