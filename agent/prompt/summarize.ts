@@ -23,9 +23,27 @@ Summary requirements:
 - Preserve files read or changed and the reason they matter.
 - Preserve unresolved errors, risks, blockers, and required verification.
 - State what should happen next.
+- End with an explicit execution directive: continue from the current step; the goal and steps are already set, so do not re-plan or finalize solely because compaction occurred.
 - Do not invent facts, infer uncertain conclusions, or claim unfinished work is complete.
 - Do not include the rubric or this summary request in the summary.
 
 Return only the concise continuation summary. No preamble, headings about the
 summary process, or user-facing completion message.
+`;
+
+export const SHORT_SUMMARY_PROMPT = `
+Condense the conversation above into a concise continuation summary. Context is
+near the token limit, so be terse.
+
+Preserve only:
+- The user's exact requirements, constraints, and acceptance criteria.
+- Verified findings with file paths, symbols, line references, and results.
+- Completed, current, and remaining action steps and the current step index.
+- Every active decision in state.decisions[].
+- Unresolved errors, risks, blockers, and required verification.
+- What should happen next.
+- End with an explicit directive to continue from the current step; do not re-plan or finalize solely because compaction occurred.
+- No unsupported completion claims.
+
+Return only the terse summary. No preamble, headings, or completion message.
 `;
