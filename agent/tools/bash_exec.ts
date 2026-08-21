@@ -14,7 +14,7 @@ import * as cp from "node:child_process";
 import * as fs from "node:fs";
 import * as nodePath from "node:path";
 import * as z from "zod";
-import { ANSI_LIGHT_ORANGE, ANSI_RESET } from "../constants.js";
+import { ANSI_DIM_WHITE_ITALIC, ANSI_ITALIC_GREEN, ANSI_LIGHT_ORANGE, ANSI_RESET } from "../constants.js";
 import { logger } from "../../config/logger.js";
 import type { ToolDefinition, ToolResult } from "../types.js";
 import { allowedRoot, resolveInsideRoot } from "./fs_guard.js";
@@ -161,7 +161,10 @@ async function bashExecSb(
   const sandboxCwd = nodePath.join(SANDBOX_WORKSPACE, nodePath.relative(workspaceRoot, hostCwd));
   const argv = [bwrapPath, ...buildSandboxArgs(workspaceRoot, sandboxCwd, writable), "--", bashPath, "-c", command];
 
-  logger.info({ event: "bash_exec", command }, `${ANSI_LIGHT_ORANGE}sandboxed bash command: ${command}${ANSI_RESET}`);
+  logger.info(
+    { event: "bash_exec", command },
+    `${ANSI_ITALIC_GREEN}sandboxed bash command:${ANSI_RESET} ${ANSI_DIM_WHITE_ITALIC}${command}${ANSI_RESET}`,
+  );
   const outcome = await runBounded(argv, { timeoutMs });
   return { command, cwd: sandboxCwd, ...outcome };
 }
