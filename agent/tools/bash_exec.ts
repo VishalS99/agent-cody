@@ -197,11 +197,32 @@ function buildSandboxArgs(workspaceRoot: string, sandboxCwd: string, writable: b
     else if (stat.isDirectory()) args.push("--ro-bind", link, link);
   }
 
+  // Mirror host PATH directories not covered by the runtime binds so tools
+  // like bun or go resolve inside the sandbox; binding at the identical path
+  // keeps absolute symlinks (e.g. bunx -> ~/.bun/bin/bun) valid.
+  const extraDirs = extraPathDirs();
+  for (const dir of extraDirs) args.push("--ro-bind", dir, dir);
+
   args.push(writable ? "--bind" : "--ro-bind", workspaceRoot, SANDBOX_WORKSPACE);
   args.push("--chdir", sandboxCwd);
-  args.push("--setenv", "PATH", SANDBOX_PATH);
+  args.push("--setenv", "PATH", [...extraDirs, SANDBOX_PATH].join(":"));
   args.push("--setenv", "HOME", SANDBOX_HOME);
   return args;
+}
+
+function extraPathDirs(): string[] {
+  const boundRoots = [...RUNTIME_RO_BINDS, ...RUNTIME_COMPAT_LINKS];
+  const isCovered = (dir: string): boolean =>
+    boundRoots.some(root => dir === root || dir.startsWith(`${root}/`));
+
+  const seen = new Set<string>();
+  const extra: string[] = [];
+  for (const dir of (process.env.PATH ?? "").split(nodePath.delimiter)) {
+    if (!dir || seen.has(dir) || isCovered(dir) || !isDirectory(dir)) continue;
+    seen.add(dir);
+    extra.push(dir);
+  }
+  return extra;
 }
 
 /**
