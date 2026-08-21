@@ -212,8 +212,7 @@ function buildSandboxArgs(workspaceRoot: string, sandboxCwd: string, writable: b
 
 function extraPathDirs(): string[] {
   const boundRoots = [...RUNTIME_RO_BINDS, ...RUNTIME_COMPAT_LINKS];
-  const isCovered = (dir: string): boolean =>
-    boundRoots.some(root => dir === root || dir.startsWith(`${root}/`));
+  const isCovered = (dir: string): boolean => boundRoots.some(root => dir === root || dir.startsWith(`${root}/`));
 
   const seen = new Set<string>();
   const extra: string[] = [];

@@ -21,6 +21,7 @@ Agent Cody is a command-line AI agent that helps with software engineering tasks
   - `files` — Batch create (max 5) or delete (max 2) files; parent dirs created recursively; each path validated against workspace root
   - `goals` — Initialize the current goal and ordered action steps
   - `state` — Update live task notes, decisions, completed steps, and files read
+  - `bash_exec` — Execute shell commands with workspace path guards, Bubblewrap sandboxing by default, optional host execution, bounded timeouts, and capped output
 - **File Path Guards**: All file operations validate paths against workspace root (`agent/tools/fs_guard.ts`) to prevent directory traversal via `..` or symlinks
 - **Structured Logging**: JSON logging via Pino with OpenTelemetry-compliant attributes
 - **Session Statistics**: Real-time tracking of tool calls, success/failure rates, token usage, and latency
@@ -123,7 +124,7 @@ You'll see a prompt: `### Prompt:` — type your query and press Enter.
 
 ### Agent Turns and Context
 
-`Agent.turn()` accepts optional `TurnHooks` callbacks for streamed deltas, tool-call start and result events, usage updates, completed action steps, and turn completion. The loop initializes the conversation with the seven registered tools: `ls`, `read_file`, `simple_grep`, `edit_file`, `files`, `goals`, and `state`.
+`Agent.turn()` accepts optional `TurnHooks` callbacks for streamed deltas, tool-call start and result events, usage updates, completed action steps, and turn completion. The loop initializes the conversation with the eight registered tools: `ls`, `read_file`, `simple_grep`, `edit_file`, `files`, `goals`, `state`, and `bash_exec`.
 
 Live task context is kept alongside conversation messages. The `goals` tool initializes the current goal and ordered action steps; the `state` tool records notes, decisions, completed steps, and files read. The current context snapshot is added to each request system prompt, and successful context updates are applied after tool execution.
 
@@ -189,8 +190,8 @@ flowchart TD
 - [x] `edit_file` — modify files in-place with batched atomic edits (edit/insert/delete/replace)
 - [x] `goals` — initialize the current goal and ordered action steps
 - [x] `state` — update live task notes, decisions, completed steps, and files read
+- [x] `bash_exec` — execute shell commands in a Bubblewrap sandbox by default, with bounded timeouts and capped output
 - [ ] `filediff` — visual diffs between file versions
-- [ ] `bash_exec` — shell command execution (validation/sandbox TBD)
 - [ ] `websearch` — search the web
 - [ ] `webfetch` — fetch content from URLs
 
