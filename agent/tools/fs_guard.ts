@@ -17,20 +17,43 @@ export async function resolveInsideRoot(
       error: `Path escapes the workspace root (${root}): "${inputPath}"`,
     };
   }
-  try {
-    const real = await fsProm.realpath(abs);
-    if (!isInside(root, real)) {
+  // Resolve existing components one at a time. `realpath(abs)` fails for a
+  // new file, but an existing parent can still be a symlink outside root.
+  const components = nodePath.relative(root, abs).split(nodePath.sep).filter(Boolean);
+  let current = root;
+  for (const [index, component] of components.entries()) {
+    const candidate = nodePath.join(current, component);
+    try {
+      const stat = await fsProm.lstat(candidate);
+      if (stat.isSymbolicLink()) {
+        const real = await fsProm.realpath(candidate);
+        if (!isInside(root, real)) {
+          return {
+            ok: false,
+            error: `Path resolves outside the workspace root (${root}) via symlink: "${inputPath}"`,
+          };
+        }
+        current = real;
+      } else {
+        current = candidate;
+      }
+    } catch (error) {
+      if (isErrno(error, "ENOENT")) {
+        // current is symlink resolved
+        return { ok: true, path: nodePath.join(current, ...components.slice(index)) };
+      }
       return {
         ok: false,
-        error: `Path resolves outside the workspace root (${root}) via symlink: "${inputPath}"`,
+        error: `Failed to resolve path "${inputPath}": ${String(error)}`,
       };
     }
-    return { ok: true, path: real };
-  } catch {
-    // Path does not exist yet (ENOENT) — lexical check already passed; the
-    // caller's own error handling reports missing files.
-    return { ok: true, path: abs };
   }
+
+  return { ok: true, path: current };
+}
+
+function isErrno(error: unknown, code: string): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === code;
 }
 
 function isInside(root: string, target: string): boolean {
