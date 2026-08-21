@@ -21,6 +21,7 @@ import {
 } from "./constants.js";
 import { buildSystemPrompt } from "./prompt/prompt.js";
 import { createSessionStats } from "./stats.js";
+import { bashExecToolDefinition } from "./tools/bash_exec.js";
 import { goalsToolDefinition } from "./tools/context/goals.js";
 import { stateToolDefinition } from "./tools/context/state.js";
 import { editFileToolDefinition } from "./tools/edit_file.js";
@@ -43,6 +44,7 @@ async function buildAgentContext(): Promise<AgentContext> {
       grepToolDefinition,
       editFileToolDefinition,
       fileToolDefinition,
+      bashExecToolDefinition,
       goalsToolDefinition,
       stateToolDefinition,
     ],
