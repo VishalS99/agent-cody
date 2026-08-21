@@ -19,4 +19,5 @@ export const TOOLS_CALLED_ANNOTATION = "\x1b[2m(tools were called)\x1b[0m\n";
 export const ANSI_ITALIC_GREEN = "\x1b[3;32m";
 export const ANSI_BOLD_YELLOW = "\x1b[1;33m";
 export const ANSI_DIM_WHITE_ITALIC = "\x1b[2;37;3m";
+export const ANSI_LIGHT_ORANGE = "\x1b[38;5;214m";
 export const ANSI_RESET = "\x1b[0m";
