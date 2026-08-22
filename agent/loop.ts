@@ -59,7 +59,7 @@ async function buildAgentContext(): Promise<AgentContext> {
 export async function runLoop(): Promise<void> {
   const context = await buildAgentContext();
   const client = new LLMClient("openai-completions", config);
-  const agent = new Agent(client, context, createSessionStats(), config.model);
+  const agent = new Agent(client, context, createSessionStats());
 
   const rl = readline.createInterface({ input, output });
 

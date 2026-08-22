@@ -11,6 +11,7 @@ import type { Stream } from "openai/core/streaming";
 
 export interface ILLMClient {
   getClient(): OpenAI;
+  getModel(): string;
   sendMessage(messages: Messages[]): Promise<OpenAI.ChatCompletion>;
   sendRequest(req: LLMRequest): Promise<OpenAI.ChatCompletion>;
   sendSRequest(req: LLMRequest): APIPromise<Stream<OpenAI.ChatCompletionChunk>>;
@@ -32,6 +33,10 @@ export class LLMClient implements ILLMClient {
 
   getClient(): OpenAI {
     return this.client;
+  }
+
+  getModel(): string {
+    return this.model;
   }
 
   sendMessage(messages: Messages[]): Promise<OpenAI.ChatCompletion> {

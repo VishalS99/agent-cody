@@ -30,11 +30,11 @@ export class Agent {
   private toolRoundCount: number = 0;
   private emptyContinuationCount = 0;
 
-  constructor(client: ILLMClient, context: AgentContext, stats: SessionStats, model = "") {
+  constructor(client: ILLMClient, context: AgentContext, stats: SessionStats) {
     this.client = client;
     this.agentContext = context;
     this.stats = stats;
-    this.model = model;
+    this.model = this.client.getModel();
   }
 
   async turn(prompt: string, hooks?: TurnHooks): Promise<TurnSummary> {
