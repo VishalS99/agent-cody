@@ -77,7 +77,7 @@ NODE_ENV=dev bun run main.ts
 ```
 
 You'll see a prompt: `### Cody:` — type your query and press Enter.
-If internet or DNS access is blocked by the sandbox, ask the agent to retry the command in unsandboxed mode to override the restriction, at your own discretion.
+If internet or DNS access is blocked by the sandbox, say **push unsandboxed** to request a retry with `sandbox: false`; the agent will ask you to confirm the exact command and working directory before running it.
 
 ## Architecture
 
