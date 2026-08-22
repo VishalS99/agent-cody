@@ -14,7 +14,7 @@ import * as cp from "node:child_process";
 import * as fs from "node:fs";
 import * as nodePath from "node:path";
 import * as z from "zod";
-import { ANSI_DIM_WHITE_ITALIC, ANSI_ITALIC_GREEN, ANSI_LIGHT_ORANGE, ANSI_RESET } from "../constants.js";
+import { ANSI_DIM_WHITE_ITALIC, ANSI_ITALIC_GREEN, ANSI_RESET } from "../constants.js";
 import { logger } from "../../config/logger.js";
 import type { ToolDefinition, ToolResult } from "../types.js";
 import { allowedRoot, resolveInsideRoot } from "./fs_guard.js";

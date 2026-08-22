@@ -46,25 +46,22 @@ export function writeLedgerLine(text: string): void {
   process.stdout.write(text);
 }
 
-// Create a synchronous pretty stream for local development
-const prettyStream = isDev
-  ? pretty({
-      destination: ledgerStream,
-      translateTime: "HH:MM:ss",
-      ignore: "pid,hostname,severityText,severityNumber,service.name,service.version,environment",
-      singleLine: true,
-      colorize: true,
-      sync: true, // Forces synchronous writes directly to stdout
-      customPrettifiers: {
-        level: (_value, _key, log, { labelColorized }) => {
-          const emoji = /^\S+\s/.exec((log as { name?: string }).name ?? "")?.[0]?.trim();
-          return `${labelColorized}  ${emoji ?? TOOLS_EMOJI}`;
-        },
-        // Strip the glyph prefix
-        name: value => (value as string).replace(/^\S+\s/, ""),
-      },
-    })
-  : undefined;
+const prettyStream = pretty({
+  destination: ledgerStream,
+  translateTime: "HH:MM:ss",
+  ignore: "pid,hostname,severityText,severityNumber,service.name,service.version,environment",
+  singleLine: true,
+  colorize: true,
+  sync: true, // Forces synchronous writes directly to stdout
+  customPrettifiers: {
+    level: (_value, _key, log, { labelColorized }) => {
+      const emoji = /^\S+\s/.exec((log as { name?: string }).name ?? "")?.[0]?.trim();
+      return `${labelColorized}  ${emoji ?? TOOLS_EMOJI}`;
+    },
+    // Strip the glyph prefix
+    name: value => (value as string).replace(/^\S+\s/, ""),
+  },
+});
 
 export const logger: Logger = pino(
   {
