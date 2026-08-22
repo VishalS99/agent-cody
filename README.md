@@ -27,7 +27,7 @@ Agent Cody is a command-line AI agent that helps with software engineering tasks
 - **Session Statistics**: Real-time tracking of tool calls, success/failure rates, token usage, and latency
 - **Rate Limit Handling**: Graceful degradation on 429/503 responses
 - **Strict Type Safety**: Full TypeScript with strict mode, Zod schemas for all boundaries
-- **Automatic Context Compaction**: Maintains long-running sessions within a 1,050,000-token context budget using scheduled rubric checks every 20 tool-call rounds and forced summarization above 80% usage; preserves the task request and live task state while removing stale transcript and tool-action history
+- **Automatic Context Compaction**: Maintains long-running sessions within a 1,050,000-token context budget using scheduled rubric checks every `COMPACTION_TURN_THRESHOLD` tool-call rounds (default 25) and forced summarization above 80% usage; preserves the task request and live task state while removing stale transcript and tool-action history
 
 ## Architecture
 
@@ -66,7 +66,7 @@ schemas/messages.ts     — Message types (Role, Messages, ToolCall)
 - **Schema-driven boundaries**: All I/O uses Zod schemas for runtime validation
 - **Tool abstraction**: Tools define their own Zod parameters and an `execute` function; the loop handles dispatch and error handling uniformly
 - **Turn hooks**: `TurnHooks` exposes streaming, tool-call, usage, step-completion, and turn-end events without coupling the agent loop to presentation
-- **Context compaction**: The agent estimates prompt and transcript tokens after tool rounds. Every 20 tool-call rounds it asks a rubric model whether to `CONTINUE` or `COMPRESS`; when compression is selected, a summary replaces the old transcript while preserving the task request, goal, action steps, notes, decisions, current step, and files read. If estimated usage exceeds 80% of the 1,050,000-token budget, compaction is forced; summaries use a shorter prompt when usage is above 90%. Internal rubric and summary requests are temporary and their usage is tracked separately.
+- **Context compaction**: The agent estimates prompt and transcript tokens after tool rounds. Every `COMPACTION_TURN_THRESHOLD` tool-call rounds (default 25) it asks a rubric model whether to `CONTINUE` or `COMPRESS`; when compression is selected, a summary replaces the old transcript while preserving the task request, goal, action steps, notes, decisions, current step, and files read. If estimated usage exceeds 80% of the 1,050,000-token budget, compaction is forced; summaries use a shorter prompt when usage is above 90%. Internal rubric and summary requests are temporary and their usage is tracked separately.
 - **Live task context**: Goals and action steps are initialized when assigned, while state, decisions, notes, and file tracking are updated as work progresses
 
 ## Getting Started
@@ -84,14 +84,24 @@ bun install
 
 ### Configuration
 
-Set the following environment variables (copy `.env.example` to `.env` and fill in your credential):
+Copy the example environment file and set your provider credentials:
 
 ```bash
-export API_KEY=your_api_key_here
-export BASE_URL=https://integrate.api.nvidia.com/v1
-export MODEL=z-ai/glm-5.2
+cp .env.example .env
 ```
 
+The supported variables are:
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `API_KEY` | Yes | API credential for the configured OpenAI-compatible provider | — |
+| `BASE_URL` | No | OpenAI-compatible API base URL | `https://api.openai.com/v1` |
+| `MODEL` | No | Model name sent to the provider | Provider-configured default |
+| `COMPACTION_TURN_THRESHOLD` | No | Positive number of tool-call rounds between context compaction checks during builds | `25` |
+
+For example:
+
+```dotenv
 ### Running
 
 ```bash
@@ -100,22 +110,30 @@ bun run start
 NODE_ENV=dev bun run main.ts
 ```
 
-You'll see a prompt: `### Prompt:` — type your query and press Enter.
+You'll see a prompt: `### Cody:` — type your query and press Enter.
 
 ## Development
 
 ### Available Scripts
 
-| Script            | Description                                      |
-|-------------------|--------------------------------------------------|
-| `bun run start`   | Start the agent (sets NODE_ENV=dev)              |
-| `bun run typecheck` | Type check without emitting files             |
-| `bun run format`  | Format code with Biome                           |
-| `bun run format:check` | Check formatting without changes           |
-| `bun run lint`    | Lint code with Biome                              |
-| `bun run lint:fix` | Auto-fix lint issues                            |
-
+| Script | Description |
+|--------|-------------|
+| `bun run start` | Start the agent in development mode |
+| `bun run build` | Create the compiled, minified executable at `build/cody` |
+| `bun run typecheck` | Type check without emitting files |
+| `bun run format` | Format code with Biome |
+| `bun run format:check` | Check formatting without changes |
 ### Code Style
+
+- **Formatter**: Biome (2-space indent, double quotes, LF line endings, trailing commas)
+- **Import style**: Use explicit ES module imports with `.js` extensions
+- **No comments**: Unless explicitly requested
+- **Strict TypeScript**: `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`
+
+### Agent Turns and Context
+```bash
+./build/cody
+```
 
 - **Formatter**: Biome (2-space indent, double quotes, LF line endings, trailing commas)
 - **Import style**: Use explicit ES module imports with `.js` extensions
