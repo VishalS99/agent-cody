@@ -29,6 +29,58 @@ Agent Cody is a command-line AI agent that helps with software engineering tasks
 - **Strict Type Safety**: Full TypeScript with strict mode, Zod schemas for all boundaries
 - **Automatic Context Compaction**: Maintains long-running sessions within a 1,050,000-token context budget using scheduled rubric checks every `COMPACTION_TURN_THRESHOLD` tool-call rounds (default 25) and forced summarization above 80% usage; preserves the task request and live task state while removing stale transcript and tool-action history
 
+## Build and Run
+
+### Prerequisites
+
+- [Bun](https://bun.sh/) runtime
+- An NVIDIA API key (or compatible OpenAI API endpoint)
+
+### Installation
+
+```bash
+bun install
+```
+
+### Configuration
+
+Copy the example environment file and set your provider credentials:
+
+```bash
+cp .env.example .env
+```
+
+The supported variables are:
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `API_KEY` | Yes | API credential for the configured OpenAI-compatible provider | — |
+| `BASE_URL` | No | OpenAI-compatible API base URL | `https://api.openai.com/v1` |
+| `MODEL` | No | Model name sent to the provider | Provider-configured default |
+| `COMPACTION_TURN_THRESHOLD` | No | Positive number of tool-call rounds between context compaction checks during builds | `25` |
+
+For example:
+
+```dotenv
+API_KEY=your-api-key
+BASE_URL=https://integrate.api.nvidia.com/v1
+MODEL=meta/llama-3.1-405b-instruct
+COMPACTION_TURN_THRESHOLD=25
+```
+
+### Running
+
+```bash
+bun run start
+# or
+NODE_ENV=dev bun run main.ts
+```
+
+You'll see a prompt: `### Cody:` — type your query and press Enter.
+If internet or DNS access is blocked by the sandbox, ask the agent to retry the command in unsandboxed mode to override the restriction, at your own discretion.
+
+## Architecture
+
 ## Architecture
 
 The codebase follows a layered architecture with unidirectional dependencies:
@@ -69,48 +121,52 @@ schemas/messages.ts     — Message types (Role, Messages, ToolCall)
 - **Context compaction**: The agent estimates prompt and transcript tokens after tool rounds. Every `COMPACTION_TURN_THRESHOLD` tool-call rounds (default 25) it asks a rubric model whether to `CONTINUE` or `COMPRESS`; when compression is selected, a summary replaces the old transcript while preserving the task request, goal, action steps, notes, decisions, current step, and files read. If estimated usage exceeds 80% of the 1,050,000-token budget, compaction is forced; summaries use a shorter prompt when usage is above 90%. Internal rubric and summary requests are temporary and their usage is tracked separately.
 - **Live task context**: Goals and action steps are initialized when assigned, while state, decisions, notes, and file tracking are updated as work progresses
 
-## Getting Started
+## Development
 
-### Prerequisites
+### Available Scripts
 
-- [Bun](https://bun.sh/) runtime
-- An NVIDIA API key (or compatible OpenAI API endpoint)
+| Script | Description |
+|--------|-------------|
+| `bun run start` | Start the agent in development mode |
+| `bun run build` | Create the compiled, minified executable at `build/cody` |
+| `bun run typecheck` | Type check without emitting files |
+| `bun run format` | Format code with Biome |
+| `bun run format:check` | Check formatting without changes |
+### Code Style
 
-### Installation
+- **Formatter**: Biome (2-space indent, double quotes, LF line endings, trailing commas)
+- **Import style**: Use explicit ES module imports with `.js` extensions
+- **No comments**: Unless explicitly requested
+- **Strict TypeScript**: `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`
 
+### Agent Turns and Context
 ```bash
-bun install
+./build/cody
 ```
 
-### Configuration
+- **Formatter**: Biome (2-space indent, double quotes, LF line endings, trailing commas)
+- **Import style**: Use explicit ES module imports with `.js` extensions
+- **No comments**: Unless explicitly requested
+- **Strict TypeScript**: `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`
 
-Copy the example environment file and set your provider credentials:
+### Agent Turns and Context
 
-```bash
-cp .env.example .env
-```
+`Agent.turn()` accepts optional `TurnHooks` callbacks for streamed deltas, tool-call start and result events, usage updates, completed action steps, and turn completion. The loop initializes the conversation with the eight registered tools: `ls`, `read_file`, `simple_grep`, `edit_file`, `files`, `goals`, `state`, and `bash_exec`.
 
-The supported variables are:
+Live task context is kept alongside conversation messages. The `goals` tool initializes the current goal and ordered action steps; the `state` tool records notes, decisions, completed steps, and files read. The current context snapshot is added to each request system prompt, and successful context updates are applied after tool execution.
 
-| Variable | Required | Description | Default |
-|----------|----------|-------------|---------|
-| `API_KEY` | Yes | API credential for the configured OpenAI-compatible provider | — |
-| `BASE_URL` | No | OpenAI-compatible API base URL | `https://api.openai.com/v1` |
-| `MODEL` | No | Model name sent to the provider | Provider-configured default |
-| `COMPACTION_TURN_THRESHOLD` | No | Positive number of tool-call rounds between context compaction checks during builds | `25` |
+Context compaction runs automatically after tool-call rounds and requires no user action. The thresholds are defined in `agent/constants.ts`: `CONTEXT_BUDGET_TOKENS` is `1_050_000`, scheduled checks run every `COMPACTION_TURN_THRESHOLD` (`20`) rounds, forced compaction starts above 80% of the budget, and `COMPACTION_NEAR_LIMIT_RATIO` (`0.9`) selects the shorter summary prompt near the limit. `TurnHooks.onCompactionStart` and `onCompactionApplied` expose compaction status and the generated summary to the CLI; failures leave the existing context intact and execution continues.
 
-For example:
+### Adding a New Tool
 
-```dotenv
-### Running
+1. Create `agent/tools/my_tool.ts`
+2. Define a Zod schema for parameters
+3. Export a `ToolDefinition` with `name`, `description`, `label`, `parameters`, and `execute`
+4. Register it in `agent/loop.ts` in the `available_tools` array
+5. If the tool changes task context, return a validated `contextUpdate`
+6. Run `bun run lint:fix` and `bun run typecheck`
 
-```bash
-bun run start
-# or
-NODE_ENV=dev bun run main.ts
-```
 
-You'll see a prompt: `### Cody:` — type your query and press Enter.
 
 ## Development
 
