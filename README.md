@@ -1,274 +1,160 @@
-
 # Agent Cody
-<img src="image.png" alt="Agent Cody Banks" width="80%"  />
+
+<img src="image.png" alt="Agent Cody Banks" width="80%" />
+
 A harness to learn about harnesses...
 
-An interactive CLI agent harness built with Bun, TypeScript, and OpenAI-compatible APIs. Designed as a learning project to explore agent architectures, tool use, and structured telemetry.
+A learning-oriented interactive CLI agent harness built with Bun, TypeScript, and OpenAI-compatible APIs. It explores agent orchestration, tool use, structured telemetry, and context management.
 
-## Overview
+## Features
 
-Agent Cody is a command-line AI agent that helps with software engineering tasks. is a command-line AI agent that helps with software engineering tasks. It interacts with users through a readline prompt, calls tools on their behalf (file operations, searching, and task context management), and tracks session statistics including token usage, tool call success rates, and response durations.
+- Interactive readline-style CLI for software-engineering tasks
+- Multi-turn tool execution, with up to 100 tool iterations per turn
+- Eight built-in tools: `ls`, `read_file`, `simple_grep`, `edit_file`, `files`, `goals`, `state`, and `bash_exec`
+- Workspace path guards for file operations
+- Atomic, schema-validated file edits and Zod validation at I/O boundaries
+- Structured Pino logging with OpenTelemetry-compatible fields
+- Session statistics for tool calls, token usage, and latency
+- Graceful handling of rate-limit (`429`) and service-unavailable (`503`) responses
+- Automatic context compaction within a 1,050,000-token budget
 
-### Key Features
+## Requirements
 
-- **Interactive REPL**: Readline-based prompt loop with graceful exit on empty input
-- **Tool Calling**: Automatic multi-turn tool execution (up to 50 iterations per turn)
-- **Built-in Tools**:
-  - `ls` — List directory contents with hidden file visibility controls
-  - `read_file` — Read text files with line offsets, truncation handling, and binary detection
-  - `simple_grep` — Regex search across files with configurable context lines
-  - `edit_file` — Apply batched atomic edits (edit/insert/delete/replace) to text files; all ops validated before mutation
-  - `files` — Batch create (max 5) or delete (max 2) files; parent dirs created recursively; each path validated against workspace root
-  - `goals` — Initialize the current goal and ordered action steps
-  - `state` — Update live task notes, decisions, completed steps, and files read
-  - `bash_exec` — Execute shell commands with workspace path guards, Bubblewrap sandboxing by default, optional host execution, bounded timeouts, and capped output
-- **File Path Guards**: All file operations validate paths against workspace root (`agent/tools/fs_guard.ts`) to prevent directory traversal via `..` or symlinks
-- **Structured Logging**: JSON logging via Pino with OpenTelemetry-compliant attributes
-- **Session Statistics**: Real-time tracking of tool calls, success/failure rates, token usage, and latency
-- **Rate Limit Handling**: Graceful degradation on 429/503 responses
-- **Strict Type Safety**: Full TypeScript with strict mode, Zod schemas for all boundaries
-- **Automatic Context Compaction**: Maintains long-running sessions within a 1,050,000-token context budget using scheduled rubric checks every `COMPACTION_TURN_THRESHOLD` tool-call rounds (default 25) and forced summarization above 80% usage; preserves the task request and live task state while removing stale transcript and tool-action history
+- [Bun](https://bun.sh/)
+- An API key for an OpenAI-compatible provider
 
-## Build and Run
-
-### Prerequisites
-
-- [Bun](https://bun.sh/) runtime
-- An NVIDIA API key (or compatible OpenAI API endpoint)
-
-### Installation
+## Installation
 
 ```bash
 bun install
 ```
 
-### Configuration
+## Configuration
 
-Copy the example environment file and set your provider credentials:
+Copy the example file and set your credentials:
 
 ```bash
 cp .env.example .env
 ```
 
-The supported variables are:
-
 | Variable | Required | Description | Default |
-|----------|----------|-------------|---------|
-| `API_KEY` | Yes | API credential for the configured OpenAI-compatible provider | — |
+| --- | --- | --- | --- |
+| `API_KEY` | Yes | API credential for the configured provider | — |
 | `BASE_URL` | No | OpenAI-compatible API base URL | `https://api.openai.com/v1` |
-| `MODEL` | No | Model name sent to the provider | Provider-configured default |
-| `COMPACTION_TURN_THRESHOLD` | No | Positive number of tool-call rounds between context compaction checks during builds | `25` |
+| `MODEL` | No | Model name sent to the provider | `gpt-5.6-luna` |
+| `REASONING_EFFORT` | No | Reasoning effort supported by the provider | `medium` |
+| `COMPACTION_TURN_THRESHOLD` | No | Number of tool-call rounds between scheduled compaction checks during builds | `25` |
 
-For example:
+Example:
 
 ```dotenv
 API_KEY=your-api-key
-BASE_URL=https://integrate.api.nvidia.com/v1
-MODEL=meta/llama-3.1-405b-instruct
+BASE_URL=https://api.openai.com/v1
+MODEL=gpt-5.6-luna
+REASONING_EFFORT=medium
 COMPACTION_TURN_THRESHOLD=25
 ```
 
-### Running
+`COMPACTION_TURN_THRESHOLD` is injected into the compiled build. The value in `.env.example` is illustrative; the build defaults to `25` when the variable is not set.
+
+## Running
+
+Run the development CLI:
 
 ```bash
 bun run start
-# or
-NODE_ENV=dev bun run main.ts
 ```
 
-You'll see a prompt: `### Cody:` — type your query and press Enter.
-If internet or DNS access is blocked by the sandbox, say **push unsandboxed** to request a retry with `sandbox: false`; the agent will ask you to confirm the exact command and working directory before running it.
+Build and run the production executable:
 
-## Architecture
-
-## Architecture
-
-The codebase follows a layered architecture with unidirectional dependencies:
-
-```
-main.ts (entry)
-    ↓
-agent/ (orchestration layer)
-    ├── loop.ts       — Agent loop: prompts, dispatches tools, tracks stats
-    ├── types.ts      — AgentContext, ToolDefinition, ToolResult, TurnHooks
-    ├── prompt/      — System prompt and live task context snapshots
-        ├── prompt.ts
-        └── rubrik.ts
-    ├── util.ts       — Wire-format conversion (ToolDefinition → ChatCompletionTool)
-    ├── stats.ts      — SessionStats tracking and recording
-    └── tools/        — Built-in tool implementations
-        ├── ls.ts
-        ├── read_file.ts
-        ├── edit_file.ts
-        ├── grep.ts
-        ├── file.ts
-        └── context/     — Goal/state tools and automatic transcript compaction
-llm/ (transport layer)
-    ├── client.ts     — LLMClient: transforms messages to OpenAI API format
-    ├── types.ts      — ConfigSchema, OpenAICompatConfig, LLMRequest
-config/ (infrastructure)
-    ├── env.ts        — Environment config (NVIDIA NIM API)
-    └── logger.ts     — Pino logger with OTel formatting
-schemas/messages.ts     — Message types (Role, Messages, ToolCall)
-```
-
-### Design Principles
-
-- **Agent → LLM unidirectionality**: The agent layer constructs `LLMRequest` objects; the LLM layer never imports from agent
-- **Schema-driven boundaries**: All I/O uses Zod schemas for runtime validation
-- **Tool abstraction**: Tools define their own Zod parameters and an `execute` function; the loop handles dispatch and error handling uniformly
-- **Turn hooks**: `TurnHooks` exposes streaming, tool-call, usage, step-completion, and turn-end events without coupling the agent loop to presentation
-- **Context compaction**: The agent estimates prompt and transcript tokens after tool rounds. Every `COMPACTION_TURN_THRESHOLD` tool-call rounds (default 25) it asks a rubric model whether to `CONTINUE` or `COMPRESS`; when compression is selected, a summary replaces the old transcript while preserving the task request, goal, action steps, notes, decisions, current step, and files read. If estimated usage exceeds 80% of the 1,050,000-token budget, compaction is forced; summaries use a shorter prompt when usage is above 90%. Internal rubric and summary requests are temporary and their usage is tracked separately.
-- **Live task context**: Goals and action steps are initialized when assigned, while state, decisions, notes, and file tracking are updated as work progresses
-
-## Development
-
-### Available Scripts
-
-| Script | Description |
-|--------|-------------|
-| `bun run start` | Start the agent in development mode |
-| `bun run build` | Create the compiled, minified executable at `build/cody` |
-| `bun run typecheck` | Type check without emitting files |
-| `bun run format` | Format code with Biome |
-| `bun run format:check` | Check formatting without changes |
-### Code Style
-
-- **Formatter**: Biome (2-space indent, double quotes, LF line endings, trailing commas)
-- **Import style**: Use explicit ES module imports with `.js` extensions
-- **No comments**: Unless explicitly requested
-- **Strict TypeScript**: `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`
-
-### Agent Turns and Context
 ```bash
+bun run build
 ./build/cody
 ```
 
-- **Formatter**: Biome (2-space indent, double quotes, LF line endings, trailing commas)
-- **Import style**: Use explicit ES module imports with `.js` extensions
-- **No comments**: Unless explicitly requested
-- **Strict TypeScript**: `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`
+The CLI prompt is `cody>`. Type `exit` to quit.
 
-### Agent Turns and Context
+## Architecture
 
-`Agent.turn()` accepts optional `TurnHooks` callbacks for streamed deltas, tool-call start and result events, usage updates, completed action steps, and turn completion. The loop initializes the conversation with the eight registered tools: `ls`, `read_file`, `simple_grep`, `edit_file`, `files`, `goals`, `state`, and `bash_exec`.
+The project is organized into layers:
 
-Live task context is kept alongside conversation messages. The `goals` tool initializes the current goal and ordered action steps; the `state` tool records notes, decisions, completed steps, and files read. The current context snapshot is added to each request system prompt, and successful context updates are applied after tool execution.
+```text
+main.ts                 Entry point
+agent/                  Agent orchestration and tools
+  agent.ts              Turn execution and context compaction
+  loop.ts               CLI loop and tool registration
+  prompt/               System prompt and rubric logic
+  stats.ts              Session statistics
+  tools/                Built-in tool implementations
+llm/                    OpenAI-compatible transport
+config/                 Environment and logging configuration
+schemas/                Runtime message schemas
+build.ts                Production build script
+```
 
-Context compaction runs automatically after tool-call rounds and requires no user action. The thresholds are defined in `agent/constants.ts`: `CONTEXT_BUDGET_TOKENS` is `1_050_000`, scheduled checks run every `COMPACTION_TURN_THRESHOLD` (`20`) rounds, forced compaction starts above 80% of the budget, and `COMPACTION_NEAR_LIMIT_RATIO` (`0.9`) selects the shorter summary prompt near the limit. `TurnHooks.onCompactionStart` and `onCompactionApplied` expose compaction status and the generated summary to the CLI; failures leave the existing context intact and execution continues.
+The agent layer creates LLM requests, while the LLM layer remains independent of agent implementation details. Tools provide their own Zod parameter schemas and execution functions. `TurnHooks` exposes streaming, tool-call, usage, compaction, and turn-completion events to the CLI.
 
-### Adding a New Tool
+### Context compaction
 
-1. Create `agent/tools/my_tool.ts`
-2. Define a Zod schema for parameters
-3. Export a `ToolDefinition` with `name`, `description`, `label`, `parameters`, and `execute`
-4. Register it in `agent/loop.ts` in the `available_tools` array
-5. If the tool changes task context, return a validated `contextUpdate`
-6. Run `bun run lint:fix` and `bun run typecheck`
-
-
+The agent uses a strategy inspired by the [Self-Compact](https://arxiv.org/abs/2510.00609): after tool-call rounds it periodically asks the model whether history should be compressed, while forcing compaction above 80% of the 1,050,000-token budget. The summary preserves the original task and live task context—goals, steps, notes, decisions, and files read—then replaces older transcript messages so work can continue from the current step. Above 90% usage, a shorter summary prompt is used; failed compaction leaves the existing context intact.
 
 ## Development
 
-### Available Scripts
+### Scripts
 
 | Script | Description |
-|--------|-------------|
-| `bun run start` | Start the agent in development mode |
-| `bun run build` | Create the compiled, minified executable at `build/cody` |
-| `bun run typecheck` | Type check without emitting files |
-| `bun run format` | Format code with Biome |
-| `bun run format:check` | Check formatting without changes |
-### Code Style
+| --- | --- |
+| `bun run start` | Start the development CLI |
+| `bun run build` | Build the compiled executable at `build/cody` |
+| `bun run typecheck` | Type-check without emitting files |
+| `bun run lint` | Run Biome linting |
+| `bun run lint:fix` | Apply Biome lint fixes |
+| `bun run format` | Format files with Biome |
+| `bun run format:check` | Check formatting without modifying files |
+| `bun run check` | Run typecheck, lint, and format checks |
 
-- **Formatter**: Biome (2-space indent, double quotes, LF line endings, trailing commas)
-- **Import style**: Use explicit ES module imports with `.js` extensions
-- **No comments**: Unless explicitly requested
-- **Strict TypeScript**: `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`
+### Adding a tool
 
-### Agent Turns and Context
-```bash
-./build/cody
-```
-
-- **Formatter**: Biome (2-space indent, double quotes, LF line endings, trailing commas)
-- **Import style**: Use explicit ES module imports with `.js` extensions
-- **No comments**: Unless explicitly requested
-- **Strict TypeScript**: `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`
-
-### Agent Turns and Context
-
-`Agent.turn()` accepts optional `TurnHooks` callbacks for streamed deltas, tool-call start and result events, usage updates, completed action steps, and turn completion. The loop initializes the conversation with the eight registered tools: `ls`, `read_file`, `simple_grep`, `edit_file`, `files`, `goals`, `state`, and `bash_exec`.
-
-Live task context is kept alongside conversation messages. The `goals` tool initializes the current goal and ordered action steps; the `state` tool records notes, decisions, completed steps, and files read. The current context snapshot is added to each request system prompt, and successful context updates are applied after tool execution.
-
-Context compaction runs automatically after tool-call rounds and requires no user action. The thresholds are defined in `agent/constants.ts`: `CONTEXT_BUDGET_TOKENS` is `1_050_000`, scheduled checks run every `COMPACTION_TURN_THRESHOLD` (`20`) rounds, forced compaction starts above 80% of the budget, and `COMPACTION_NEAR_LIMIT_RATIO` (`0.9`) selects the shorter summary prompt near the limit. `TurnHooks.onCompactionStart` and `onCompactionApplied` expose compaction status and the generated summary to the CLI; failures leave the existing context intact and execution continues.
-
-### Adding a New Tool
-
-1. Create `agent/tools/my_tool.ts`
-2. Define a Zod schema for parameters
-3. Export a `ToolDefinition` with `name`, `description`, `label`, `parameters`, and `execute`
-4. Register it in `agent/loop.ts` in the `available_tools` array
-5. If the tool changes task context, return a validated `contextUpdate`
-6. Run `bun run lint:fix` and `bun run typecheck`
+1. Create a module under `agent/tools/`.
+2. Define a Zod schema for its parameters.
+3. Export a `ToolDefinition` with its name, description, label, parameters, and `execute` function.
+4. Register the definition in `agent/loop.ts`.
+5. Return a validated `contextUpdate` if the tool changes task context.
+6. Run `bun run check`.
 
 ## Telemetry
-All logging is structured JSON via Pino, with OpenTelemetry-compatible fields:
 
-- `service.name`, `service.version`, `environment` — standard OTel resource attributes
-- `trace.id`, `span.id`, `trace.flags` — trace context (when OTel is configured)
-- `severityNumber`, `severityText` — OTel log severity mapping
-- `pino-pretty` is used for human-readable dev output
+Logging uses Pino. Development output is formatted with `pino-pretty`, while log records include OpenTelemetry-compatible service, environment, severity, and trace fields where available.
 
-## Terminal Rendering
+## Terminal rendering
 
-This project intentionally avoids a full Text User Interface (TUI) library. Instead, it streams text straight to `process.stdout` and uses ANSI escape sequences to overlay rich content interactively. The orchestration lives in `agent/loop.ts`, the details in `config/logger.ts`.
+The CLI uses `stdout` directly rather than a full-screen TUI. The model response is streamed through `TurnHooks.onDelta`: each text delta is written immediately for low-latency output and accumulated into response segments. Tool and status messages are written to the same stream and recorded in `logLedger`, including their visible row counts. ANSI sequences are stripped when measuring wrapped lines, so redraw calculations use terminal-visible rows rather than raw string length.
 
-### Streaming and text render
+When a turn completes on a TTY, the CLI calculates the streamed response and ledger height, moves the cursor up, and clears that output area. It then replays the ledger entries, converts each response segment from Markdown with `Bun.markdown.ansi`, and inserts `(tools were called)` between segments separated by tool activity. This replaces the raw stream with the formatted final output without losing logs emitted during the turn.
 
-1. **Raw stream**: As the LLM streams tokens, each delta is written to `stdout` immediately via `process.stdout.write(text)` (`agent/loop.ts`). This gives the user a latency-free view.
-2. **Segmentation**: The stream is split on newlines into segments, so each text block can later be rendered as Markdown separately (`loop.ts`).
-3. **Markdown rendering with `Bun.markdown.ansi`**: Once the model turn completes, each segment text is passed through `Bun.markdown.ansi(seg)`, which converts GitHub-flavored Markdown into colored ANSI output directly in the terminal without any external TUI library.
-4. **Tool-call annotations**: If any tools ran between two text segments (tracked via a boundary ledger), an interpolated `[tools were called]` line is inserted under the rendered Markdown block.
+If the cursor movement would exceed the terminal height, the CLI skips the redraw and writes a newline instead. Non-TTY output is not redrawn, making pipes and redirected output safe and plain.
 
-### The log ledger and redraw trick
-
-Logs (“pino-pretty” structured, colorful json lines) and the streamed answer share `stdout`. With no TUI double-buffering, the loop needs to reconcile them visually:
-
-- **`logLedger`** (`config/logger.ts`): every chunk written by the pino-pretty stream is appended here as `{lines: number, text: string}` lines. Lines are computed by `visualLines(text)`, which strips ANSI SGR codes and divides visible width by terminal column count to get the true row footprint.
-- **Redraw sequence** (`agent/loop.ts`): after the turn completes:
-  1. Calculate how far up the cursor needs to move (block lines from ledger + visual lines of streamed text).
-  2. Emit `\x1b[<n>A` (cursor up) + `\x1b[J` (clear to end of screen).
-  3. Reprint the `>` prompt marker, followed by each ledger entry (tool logs).
-  4. Reprint the streamed text, but now rendered through `Bun.markdown.ansi`, with tool-call annotations in between.
-- **Safety**: if the computed jump exceeds the terminal height (`process.stdout.rows ?? 24`), the redraw is skipped and output just advances normally.
-
-### Rendering flow summary
+### Rendering flow
 
 ```mermaid
 flowchart TD
-  A[LLM streams tokens] -->|onDelta| B[stdout.write raw text]
-  B --> C[Split stream into segments]
-  C --> D[Agent runs tools]
-  D --> E[Turn complete]
-  E --> F[Cursor up + clear ANSI]
-  F --> G[Replay log ledger entries]
-  G --> H[Bun.markdown.ansi per segment]
-  H --> I[Insert tool-called annotations]
-  I --> J[Final rendered output]
+  A[LLM stream] --> B[TurnHooks.onDelta]
+  B --> C[Write raw delta to stdout]
+  B --> D[Accumulate response segments]
+  C --> E[Tool and status output]
+  E --> F[Record visible rows in logLedger]
+  D --> G[Turn completes]
+  F --> G
+  G --> H{TTY and redraw within screen height?}
+  H -- No --> I[Write newline; keep streamed output]
+  H -- Yes --> J[Move cursor up and clear area]
+  J --> K[Replay ledger entries]
+  K --> L[Render segments with Bun.markdown.ansi]
+  L --> M[Add tool-call annotations]
+  M --> N[Final terminal output]
 ```
 
-
-- [x] `files` — batch create/delete files (max 5 / 2); each path validated against the workspace root
-- [x] `edit_file` — modify files in-place with batched atomic edits (edit/insert/delete/replace)
-- [x] `goals` — initialize the current goal and ordered action steps
-- [x] `state` — update live task notes, decisions, completed steps, and files read
-- [x] `bash_exec` — execute shell commands in a Bubblewrap sandbox by default, with bounded timeouts and capped output
-- [ ] `filediff` — visual diffs between file versions
-- [ ] `websearch` — search the web
-- [ ] `webfetch` — fetch content from URLs
-
+## License
 ## License
 
 See [LICENSE](LICENSE) for details.
