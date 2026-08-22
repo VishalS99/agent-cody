@@ -13,4 +13,5 @@ export const config: OpenAICompatConfig = ConfigSchema.parse({
   model: process.env.MODEL,
   baseURL: process.env.BASE_URL,
   apiKey: requiredEnv("API_KEY"),
+  reasoningEffort: process.env.REASONING_EFFORT?.trim() as "none" | "low" | "medium" | "high",
 });
