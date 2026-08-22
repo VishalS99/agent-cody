@@ -1,26 +1,3 @@
-/**
- * Internal context compaction controller.
- *
- * The agent does not call this tool. The agent loop invokes it after the
- * configured number of completed tool-call rounds, before continuing execution.
- *
- * First, append a temporary rubric request and make one internal LLM request.
- *
- * CONTINUE:
- * - discard the temporary rubric request and response
- * - leave persistent context unchanged
- *
- * COMPRESS:
- * - discard the rubric request and response
- * - make a second internal LLM request for the summary
- * - replace the transcript with the task anchor and generated summary
- * - preserve goal, action steps, notes, decisions, current step, and files read
- * - remove stale tool messages and tool-action records
- *
- * Internal rubric and summary requests are not normal agent-loop iterations and
- * are never persisted as conversation messages or tool actions.
- */
-
 import type OpenAI from "openai";
 import { config } from "../../../config/env.js";
 import { logger } from "../../../config/logger.js";
