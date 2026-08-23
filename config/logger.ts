@@ -79,7 +79,7 @@ export const logger: Logger = pino(
           severityNumber: number,
         }),
         bindings: bindings => ({
-          "service.name": "harness",
+          "service.name": "agent cody",
           "service.version": process.env.npm_package_version ?? "1.0.0",
           environment: process.env.NODE_ENV ?? "development",
           pid: bindings.pid,
