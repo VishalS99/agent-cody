@@ -6,6 +6,7 @@ import { LLMClient } from "../llm/client.js";
 import { Agent } from "./agent.js";
 import {
   ANSI_BOLD_YELLOW,
+  ANSI_DIM_GREY,
   ANSI_DIM_WHITE_ITALIC,
   ANSI_ITALIC_GREEN,
   ANSI_RESET,
@@ -14,6 +15,7 @@ import {
   DEFAULT_SCREEN_ROWS,
   FORCED_COMPACTION_NOTICE,
   RATE_LIMIT_STATUS,
+  HORIZONTAL_SEPARATOR,
   REPLY_PREFIX,
   SCHEDULED_COMPACTION_NOTICE,
   SERVICE_UNAVAILABLE_STATUS,
@@ -110,6 +112,10 @@ export async function runLoop(): Promise<void> {
           writeLedgerLine(`${ANSI_DIM_WHITE_ITALIC}${summary}${ANSI_RESET}\n`);
         },
       });
+      if (cur !== "") {
+        segments.push(cur);
+        boundaries.push(logLedger.length);
+      }
 
       if (process.stdout.isTTY && streamed.length > 0) {
         const blockLogs = logLedger.slice(ledgerStart);
@@ -131,11 +137,17 @@ export async function runLoop(): Promise<void> {
             if (hadTools) annotated += TOOLS_CALLED_ANNOTATION;
           });
           process.stdout.write(annotated);
+          process.stdout.write(
+            `${ANSI_DIM_GREY}${HORIZONTAL_SEPARATOR.repeat(process.stdout.columns ?? 80)}${ANSI_RESET}\n`,
+          );
         } else {
           process.stdout.write("\n");
         }
       } else {
         process.stdout.write("\n");
+        process.stdout.write(
+          `${ANSI_DIM_GREY}${HORIZONTAL_SEPARATOR.repeat(process.stdout.columns ?? 80)}${ANSI_RESET}\n`,
+        );
       }
     } catch (err) {
       const status = (err as { status?: number } | undefined)?.status;
