@@ -1,3 +1,24 @@
+/**
+ * edit_file — batched, atomic, in-place edits to an existing text file.
+ *
+ * Ops (each carries only its own fields):
+ *   edit:    { lineNo, start, end, text } — replace [start,end) columns with text; empty text deletes the span; end:-1 = rest of line
+ *   insert:  { lineNo, start, text }      — insert text at column start (text may contain "\n")
+ *   delete:  { lineNo, count = 1 }        — remove `count` whole lines (complete-line deletes only)
+ *   replace: { lineNo, count = 1, text }  — replace `count` whole lines with text (swap a line block)
+ *
+ * Indexing: lineNo 1-indexed, start/end UTF-16 code units — matches read_file (no phantom
+ * trailing line; "\r\n" stripped). All ops target ORIGINAL-file coordinates.
+ *
+ * Contract: validate everything before mutating; write-back via temp file + rename (atomic);
+ * on any failure the file is untouched and isError:true. Ops apply sorted by (lineNo desc,
+ * start desc). Overlapping/ambiguous ops (same-line ranges, same-point inserts, delete vs an
+ * op in its range) are rejected. Only text files: binaries, dirs, >1MB rejected.
+ *
+ * Response: success/op-failure -> { path, edits: [{ index, function, error? }] } (input order,
+ * error only on the single failing op); file-level failure -> { path, error }.
+ */
+
 import * as fsProm from "node:fs/promises";
 import type { ToolDefinition, ToolResult } from "../../types.js";
 import { resolveInsideRoot } from "../fs_guard.js";
