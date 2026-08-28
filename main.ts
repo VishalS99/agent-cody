@@ -1,4 +1,5 @@
 import { parseArgs } from "node:util";
+import { ANSI_RESET, ANSI_WHITE, ANSI_YELLOW } from "./agent/constants.js";
 import { runLoop } from "./agent/loop.js";
 import { createAgent } from "./agent/session/factory.js";
 import { persistSession } from "./agent/session/persist.js";
@@ -17,7 +18,7 @@ async function main(): Promise<void> {
   const agent = await createAgent(sessionId);
   await runLoop(agent);
   persistSession(agent);
-  console.log("Session: ", agent.getSessionId());
+  process.stdout.write(`${ANSI_WHITE}Session Id: ${ANSI_YELLOW}${agent.getSessionId()}${ANSI_RESET}\n`);
 }
 
 main().catch(error => {
