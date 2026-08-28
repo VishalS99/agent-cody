@@ -32,7 +32,14 @@ export async function runLoop(agent: Agent): Promise<void> {
       return;
     }
     if (answer.trim() === "" || answer.trim() === CLI_EXIT_COMMAND) {
-      logger.info({ event: "runLoop_exit", stats: agent.getStats() }, "Bye!");
+      logger.info(
+        {
+          event: "runLoop_exit",
+          stats: agent.getStats(),
+          compaction_count: agent.getCompactionCount(),
+        },
+        "Bye!",
+      );
       rl.close();
       return;
     }

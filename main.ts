@@ -1,4 +1,4 @@
-import { buildAgentContextFromSessionId, initializeDatabase, insertSession } from "./agent/db.js";
+import { buildAgentContextFromSessionId, initializeDatabase, insertSession, updateSession } from "./agent/db.js";
 import { runLoop } from "./agent/loop.js";
 import { Agent } from "./agent/agent.js";
 import { createSessionStats } from "./agent/stats.js";
@@ -33,13 +33,17 @@ async function init(oldSessionId: string | undefined): Promise<Agent> {
     }
     const context = oldSessionDetails.agentContext;
     const stats = oldSessionDetails.stats;
+    const compactionCount = oldSessionDetails.compactionCount;
     if (context == null) {
       throw new Error("Old session context is null or undefined");
     }
     if (stats == null) {
       throw new Error("Old session stats is null or undefined");
     }
-    return new Agent(client, context, stats, oldSessionId);
+    if (compactionCount == null) {
+      throw new Error("Old session compaction count is null or undefined");
+    }
+    return new Agent(client, context, stats, oldSessionId, compactionCount);
   }
 
   const defaultContext = await buildAgentContext();
@@ -67,7 +71,7 @@ async function init(oldSessionId: string | undefined): Promise<Agent> {
     },
   });
 
-  return new Agent(client, defaultContext, defaultStats, sessionId);
+  return new Agent(client, defaultContext, defaultStats, sessionId, 0);
 }
 
 async function main(): Promise<void> {
@@ -81,6 +85,19 @@ async function main(): Promise<void> {
   const sessionId = values.sessionId;
   const agent = await init(sessionId);
   await runLoop(agent);
+  const context = agent.getAgentContext();
+  updateSession(agent.getSessionId(), {
+    lastUpdatedAt: Date.now(),
+    stats: agent.getStats(),
+    compactionCount: agent.getCompactionCount(),
+    ...(context.goal !== undefined ? { goal: context.goal } : {}),
+    ...(context.action_steps !== undefined ? { actionSteps: context.action_steps } : {}),
+    ...(context.task_request !== undefined ? { taskRequest: context.task_request } : {}),
+    ...(context.available_tools !== undefined
+      ? { availableTools: context.available_tools.map(tool => tool.function.name) }
+      : {}),
+    ...(context.state !== undefined ? { state: context.state } : {}),
+  });
   console.log("Session: ", agent.getSessionId());
 }
 
