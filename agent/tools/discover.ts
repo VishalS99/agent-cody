@@ -1,11 +1,11 @@
-import { bashExecToolDefinition } from "./bash_exec_tool/index.js";
+import { bashExecToolDefinition } from "./bash_exec_tool/tool.js";
 import { goalsToolDefinition } from "./context/goals.js";
 import { stateToolDefinition } from "./context/state.js";
-import { editFileToolDefinition } from "./edit_file_tool/index.js";
-import { fileToolDefinition } from "./file_tool/index.js";
-import { grepToolDefinition } from "./grep_tool/index.js";
-import { lsToolDefinition } from "./ls_tool/index.js";
-import { readFileToolDefinition } from "./read_file_tool/index.js";
+import { editFileToolDefinition } from "./edit_file_tool/tool.js";
+import { fileToolDefinition } from "./file_tool/tool.js";
+import { grepToolDefinition } from "./grep_tool/tool.js";
+import { lsToolDefinition } from "./ls_tool/tool.js";
+import { readFileToolDefinition } from "./read_file_tool/tool.js";
 
 // tool definition discovery
 export const allToolDefinitions = [
