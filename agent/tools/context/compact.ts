@@ -7,6 +7,7 @@ import { COMPACTION_RUBRIC_PROMPT } from "../../prompt/rubric.js";
 import { SHORT_SUMMARY_PROMPT, SUMMARY_PROMPT } from "../../prompt/summarize.js";
 import type { InternalUsage } from "../../stats.js";
 import type { AgentContext } from "../../types.js";
+import { buildLeanContext } from "../../context/clone.js";
 
 export type CompactContextResult = {
   context: AgentContext;
@@ -159,22 +160,4 @@ function isRubricDecision(value: unknown): value is { response: "COMPRESS" | "CO
   return value.response === "COMPRESS" || value.response === "CONTINUE";
 }
 
-export function buildLeanContext(context: AgentContext): AgentContext {
-  return {
-    ...context,
-    messages: context.messages.map(message => ({
-      ...message,
-      ...(message.tool_calls ? { tool_calls: [...message.tool_calls] } : {}),
-    })),
-    ...(context.state
-      ? {
-          state: {
-            ...context.state,
-            notes: [...context.state.notes],
-            decisions: [...context.state.decisions],
-            files_read: [...context.state.files_read],
-          },
-        }
-      : {}),
-  };
-}
+export { buildLeanContext } from "../../context/clone.js";

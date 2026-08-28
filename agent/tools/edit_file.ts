@@ -24,6 +24,7 @@ import * as z from "zod";
 import type { ToolDefinition, ToolResult } from "../types.js";
 import { errorCode, errorMessage } from "../util.js";
 import { resolveInsideRoot } from "./fs_guard.js";
+import { BINARY_SNIFF_BYTES, MAX_BYTES, isBinaryBuffer } from "./io/guard.js";
 
 export const editFileOpSchema = z.discriminatedUnion("function", [
   z.object({
@@ -482,9 +483,6 @@ function linePreview(line: string, max = 80): string {
   return line.length <= max ? line : `${line.slice(0, max)}…`;
 }
 
-const MAX_BYTES = 1_000_000;
-const BINARY_SNIFF_BYTES = 1024;
-
 /** Rejects directories, oversized files, and binaries (NUL sniff); reports access errors. */
 async function editFileValidation(filePath: string): Promise<{ isErr: boolean; error: string }> {
   let fd: fsProm.FileHandle | undefined;
@@ -504,7 +502,7 @@ async function editFileValidation(filePath: string): Promise<{ isErr: boolean; e
     const { bytesRead } = await fd.read(buf, 0, BINARY_SNIFF_BYTES, 0);
     const sniff = buf.subarray(0, bytesRead);
 
-    if (sniff.includes(0)) {
+    if (isBinaryBuffer(sniff)) {
       return { isErr: true, error: `File is binary: ${filePath}` };
     }
   } catch (e) {

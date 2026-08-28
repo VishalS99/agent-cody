@@ -5,10 +5,9 @@ import * as z from "zod";
 import { logger } from "../../config/logger.js";
 import type { ToolDefinition, ToolResult } from "../types.js";
 import { resolveInsideRoot } from "./fs_guard.js";
+import { BINARY_SNIFF_BYTES, MAX_BYTES, isBinaryBuffer } from "./io/guard.js";
 
 const MAX_LINES = 1000;
-const MAX_BYTES = 1_000_000;
-const BINARY_SNIFF_BYTES = 1024;
 
 export const fileReadSchema = z.object({
   path: z.string().describe("Path to file (relative paths resolve against cwd)"),
@@ -74,13 +73,12 @@ export const readFileToolDefinition: ToolDefinition<typeof fileReadSchema> = {
             isError: true,
           };
         }
-        // 2. Binary sniff — read first 1 KB, check for NUL bytes.
         const buf = Buffer.alloc(BINARY_SNIFF_BYTES);
         const fd = await fsProm.open(resolvedPath, "r");
         const { bytesRead } = await fd.read(buf, 0, BINARY_SNIFF_BYTES, 0);
         await fd.close();
         const sniff = buf.subarray(0, bytesRead);
-        if (sniff.indexOf(0) !== -1) {
+        if (isBinaryBuffer(sniff)) {
           return {
             tool_call_id: toolId,
             content: JSON.stringify({

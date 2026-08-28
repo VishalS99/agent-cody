@@ -5,6 +5,7 @@ import type { ChatCompletionMessageParam } from "openai/resources.js";
 import { logger } from "../config/logger.js";
 import type { APIPromise } from "openai/core/api-promise";
 import type { Stream } from "openai/core/streaming";
+import { toChatMessage } from "./mappers.js";
 
 // llm/ is the transport layer: it speaks OpenAI ChatCompletion shapes only.
 // It deliberately has no import from agent/ — the agent builds LLMRequest.
@@ -75,7 +76,7 @@ export class LLMClient implements ILLMClient {
   }
 
   transformMessages(messages: Messages[]): ChatCompletionMessageParam[] {
-    return messages.map(m => this.toChatMessage(m));
+    return messages.map(m => toChatMessage(m));
   }
 
   transformRequest(req: LLMRequest): ChatCompletionMessageParam[] {
@@ -91,35 +92,9 @@ export class LLMClient implements ILLMClient {
     }
 
     for (const msg of req.messages) {
-      transformedMessages.push(this.toChatMessage(msg));
+      transformedMessages.push(toChatMessage(msg));
     }
     return transformedMessages;
-  }
-
-  private toChatMessage(msg: Messages): ChatCompletionMessageParam {
-    switch (msg.role) {
-      case "system":
-        return { role: "system", content: msg.content };
-      case "user":
-        return { role: "user", content: msg.content };
-      case "assistant":
-        return msg.tool_calls && msg.tool_calls.length > 0
-          ? {
-              role: "assistant",
-              content: msg.content,
-              tool_calls: msg.tool_calls,
-            }
-          : { role: "assistant", content: msg.content };
-      case "tool":
-        if (!msg.tool_call_id) {
-          throw new Error("tool role messages require tool_call_id");
-        }
-        return {
-          role: "tool",
-          content: msg.content,
-          tool_call_id: msg.tool_call_id,
-        };
-    }
   }
 
   printMessages(messages: Messages[], roles: Role[]): void {
