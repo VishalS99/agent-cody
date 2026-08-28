@@ -1,27 +1,23 @@
 import type { ChatCompletionChunk, ChatCompletionMessageFunctionToolCall } from "openai/resources.js";
 import { logger } from "../config/logger.js";
 import type { ILLMClient } from "../llm/client.js";
-import type { LLMRequest } from "../llm/types.js";
 import type { Messages } from "../schemas/messages.js";
-import { insertMessage, insertToolMessageAndAction, type MessageRecord } from "./db.js";
+import { runOptionalCompaction } from "./compaction/orchestrator.js";
 import {
-  COMPACTION_NEAR_LIMIT_RATIO,
-  COMPACTION_TURN_THRESHOLD,
-  CONTEXT_BUDGET_TOKENS,
   EMPTY_RESPONSE_CONTINUATION_PROMPT,
   MAX_EMPTY_CONTINUATIONS,
   MAX_TOOL_ITERATIONS,
   RATE_LIMIT_STATUS,
   SERVICE_UNAVAILABLE_STATUS,
 } from "./constants.js";
-import { buildRequestSystemPrompt } from "./prompt/prompt.js";
+import { toLLMRequest } from "./context/llm_request.js";
+import { isTaskIncomplete } from "./context/status.js";
+import { insertMessage, insertToolMessageAndAction, type MessageRecord } from "./db.js";
 import type { SessionStats } from "./stats.js";
-import { recordContextEstimate, recordInternalUsage, recordLLMResponse, recordToolCall } from "./stats.js";
-import type { SummaryResult } from "./tools/context/compact.js";
-import { buildLeanContext, compactContext, requestSummary } from "./tools/context/compact.js";
-import { applyContextUpdate } from "./tools/context/manager.js";
+import { recordLLMResponse, recordToolCall } from "./stats.js";
+import { dispatchToolCall, findToolDefinition as findToolDefinitionHelper } from "./turn/dispatcher.js";
+import { collectStream } from "./turn/stream.js";
 import type { AgentContext, ToolAction, ToolDefinition, ToolResult, TurnHooks, TurnSummary } from "./types.js";
-import { toWireTool } from "./util.js";
 
 export class Agent {
   private client: ILLMClient;
@@ -53,41 +49,19 @@ export class Agent {
     while (itr++ < MAX_TOOL_ITERATIONS) {
       const llmStart = performance.now();
       const iterationStart = reply.length;
-      const toolCalls: ChatCompletionMessageFunctionToolCall[] = [];
+      let toolCalls: ChatCompletionMessageFunctionToolCall[] = [];
       let finishReason: ChatCompletionChunk.Choice["finish_reason"] | undefined;
       let usage: ChatCompletionChunk["usage"] | undefined;
 
       try {
         const stream = await this.client.sendSRequest(toLLMRequest(this.agentContext));
-        for await (const chunk of stream) {
-          const delta = chunk.choices[0]?.delta;
-          const piece = delta?.content ?? "";
-          if (piece) {
-            reply += piece;
-            hooks?.onDelta?.(piece);
-          }
-          for (const tc of delta?.tool_calls ?? []) {
-            const existing = toolCalls[tc.index];
-            if (!existing) {
-              toolCalls[tc.index] = {
-                id: tc.id ?? "",
-                type: "function",
-                function: {
-                  name: tc.function?.name ?? "",
-                  arguments: tc.function?.arguments ?? "",
-                },
-              };
-            } else {
-              if (tc.id) existing.id = tc.id;
-              if (tc.function?.name) existing.function.name += tc.function.name;
-              existing.function.arguments += tc.function?.arguments ?? "";
-            }
-          }
-          if (chunk.choices[0]?.finish_reason) {
-            finishReason = chunk.choices[0].finish_reason;
-          }
-          if (chunk.usage) usage = chunk.usage;
-        }
+        const aggregated = await collectStream(stream, piece => {
+          reply += piece;
+          hooks?.onDelta?.(piece);
+        });
+        toolCalls = aggregated.toolCalls;
+        finishReason = aggregated.finishReason;
+        usage = aggregated.usage;
         if (reply.length > iterationStart) hooks?.onDelta?.("\n");
       } catch (err) {
         const status = (err as { status?: number } | undefined)?.status;
@@ -131,7 +105,7 @@ export class Agent {
         const iterationText = reply.slice(iterationStart);
         if (
           iterationText.trim() === "" &&
-          this.isTaskIncomplete() &&
+          isTaskIncomplete(this.agentContext) &&
           this.emptyContinuationCount < MAX_EMPTY_CONTINUATIONS
         ) {
           this.emptyContinuationCount++;
@@ -164,7 +138,8 @@ export class Agent {
 
         const toolStart = performance.now();
         hooks?.onToolCallStart?.(call);
-        const result = await this.dispatchToolCall(call, hooks);
+        const result = await dispatchToolCall(this.agentContext, call, hooks);
+        this.recordToolAction(call, call.function.name, result);
         hooks?.onToolCallResult?.(result);
         toolCallCount++;
         this.stats = recordToolCall(this.stats, {
@@ -221,200 +196,28 @@ export class Agent {
   }
 
   private async runOptionalCompaction(hooks?: TurnHooks): Promise<void> {
-    const nearLimit = this.stats.currentContextTokens > COMPACTION_NEAR_LIMIT_RATIO * CONTEXT_BUDGET_TOKENS;
-
-    if (this.stats.currentContextTokens > 0.8 * CONTEXT_BUDGET_TOKENS) {
-      hooks?.onCompactionStart?.("forced");
-      const summaryResult: SummaryResult = await requestSummary(
-        buildLeanContext(this.agentContext),
-        this.client,
-        nearLimit,
-      );
-      this.stats = recordInternalUsage(
-        this.stats,
-        summaryResult.ok ? summaryResult.usage : { inputTokens: 0, outputTokens: 0, durationMs: 0 },
-      );
-      if (summaryResult.ok) {
-        this.replaceTranscript(summaryResult.content);
-        this.compactionCount++;
-        this.toolRoundCount = 0;
-        this.stats = recordContextEstimate(this.stats, this.estimateContextTokens(this.agentContext));
-        hooks?.onCompactionApplied?.(summaryResult.content, "forced");
-        logger.info(
-          {
-            event: "forced_compaction",
-            context_tokens: this.stats.currentContextTokens,
-            compaction_count: this.compactionCount,
-          },
-          "Forced context compaction applied",
-        );
-      } else {
-        logger.warn(
-          {
-            event: "forced_compaction_failed",
-            error: summaryResult.error,
-          },
-          "Forced context compaction failed",
-        );
-      }
-      return;
-    }
-
-    if (this.toolRoundCount % COMPACTION_TURN_THRESHOLD === 0) {
-      hooks?.onCompactionStart?.("scheduled");
-      try {
-        const res = await compactContext(this.agentContext, this.client, nearLimit);
-        if (res.usage) {
-          this.stats = recordInternalUsage(this.stats, res.usage);
-        }
-        logger.info(
-          {
-            event: "compaction_rubric",
-            status: res.status,
-            compaction_count: this.compactionCount,
-            ...(res.error ? { error: res.error } : {}),
-          },
-          "Compaction rubric decision",
-        );
-        if (res.status === "COMPRESS") {
-          this.agentContext = res.context;
-          this.persistCompactionMessages();
-          this.compactionCount++;
-          this.toolRoundCount = 0;
-          this.stats = recordContextEstimate(this.stats, this.estimateContextTokens(this.agentContext));
-          const appliedSummary = this.agentContext.messages[this.agentContext.messages.length - 1]?.content ?? "";
-          hooks?.onCompactionApplied?.(appliedSummary, "scheduled");
-          logger.info(
-            {
-              event: "compaction_applied",
-              context_tokens: this.stats.currentContextTokens,
-              compaction_count: this.compactionCount,
-            },
-            "Context compaction applied — history summarized; continuing from the current step",
-          );
-        }
-      } catch (error) {
-        logger.warn(
-          {
-            event: "compaction_rubric_error",
-            error: error instanceof Error ? error.message : String(error),
-          },
-          "Compaction rubric errored; continuing with existing context",
-        );
-      }
-    }
-  }
-
-  private replaceTranscript(summary: string): void {
-    const userMessage = this.agentContext.messages.find(m => m.role === "user");
-    const taskRequest =
-      this.agentContext.task_request ?? (typeof userMessage?.content === "string" ? userMessage.content : "");
-    this.agentContext = {
-      ...this.agentContext,
-      messages: [],
-      tool_actions_taken: [],
-    };
-    this.addMessage({ role: "user", content: taskRequest }, "compaction_task");
-    this.addMessage({ role: "assistant", content: summary }, "compaction_summary");
-  }
-
-  private estimateContextTokens(context: AgentContext): number {
-    const system = buildRequestSystemPrompt(context);
-    const transcript = context.messages
-      .map(message => `${message.role}:${message.content ?? ""}${message.tool_call_id ?? ""}`)
-      .join("\n");
-    return Math.max(1, Math.round((system.length + transcript.length) / 4));
-  }
-
-  private isTaskIncomplete(): boolean {
-    return (this.agentContext.action_steps ?? []).some(step => step.status !== "completed");
+    const result = await runOptionalCompaction(
+      {
+        agentContext: this.agentContext,
+        stats: this.stats,
+        toolRoundCount: this.toolRoundCount,
+        compactionCount: this.compactionCount,
+      },
+      {
+        client: this.client,
+        addMessage: (msg, kind) => this.addMessage(msg, kind),
+        persistCompactionMessages: ctx => this.persistCompactionMessagesForContext(ctx),
+      },
+      hooks,
+    );
+    this.agentContext = result.agentContext;
+    this.stats = result.stats;
+    this.toolRoundCount = result.toolRoundCount;
+    this.compactionCount = result.compactionCount;
   }
 
   private findToolDefinition(toolName: string): ToolDefinition | undefined {
-    return this.agentContext.available_tools?.find(t => t.function.name === toolName);
-  }
-
-  private async dispatchToolCall(call: ChatCompletionMessageFunctionToolCall, hooks?: TurnHooks): Promise<ToolResult> {
-    const tool = this.findToolDefinition(call.function.name);
-
-    if (!tool) {
-      const result: ToolResult = {
-        tool_call_id: call.id,
-        content: JSON.stringify({
-          error: `Tool '${call.function.name}' not found`,
-        }),
-        isError: true,
-      };
-      this.recordToolAction(call, call.function.name, result);
-      return result;
-    }
-
-    let rawParams: unknown;
-    try {
-      rawParams = JSON.parse(call.function.arguments);
-    } catch {
-      const result: ToolResult = {
-        tool_call_id: call.id,
-        content: JSON.stringify({
-          error: "Invalid JSON tool arguments",
-        }),
-        isError: true,
-      };
-      this.recordToolAction(call, tool.function.name, result);
-      return result;
-    }
-
-    const parsedParams = tool.function.parameters.safeParse(rawParams);
-    if (!parsedParams.success) {
-      const result: ToolResult = {
-        tool_call_id: call.id,
-        content: JSON.stringify({
-          error: `Invalid arguments: ${parsedParams.error.message}`,
-        }),
-        isError: true,
-      };
-      this.recordToolAction(call, tool.function.name, result);
-      return result;
-    }
-
-    let result: ToolResult;
-    try {
-      result = await tool.function.execute(call.id, parsedParams.data);
-    } catch (err) {
-      result = {
-        tool_call_id: call.id,
-        content: JSON.stringify({
-          error: `Execution error: ${err instanceof Error ? err.message : String(err)}`,
-        }),
-        isError: true,
-      };
-    }
-
-    const completedIndex =
-      result.contextUpdate?.type === "update_state" ? result.contextUpdate.step_completed : undefined;
-    if (!result.isError && result.contextUpdate) {
-      try {
-        applyContextUpdate(this.agentContext, result.contextUpdate);
-      } catch (err) {
-        result = {
-          ...result,
-          content: JSON.stringify({
-            error: `Context update error: ${err instanceof Error ? err.message : String(err)}`,
-          }),
-          isError: true,
-        };
-      }
-    }
-
-    this.recordToolAction(call, tool.function.name, result);
-
-    if (!result.isError && completedIndex !== undefined) {
-      const completedStep = this.agentContext.action_steps?.[completedIndex];
-      const nextStep = this.agentContext.action_steps?.[completedIndex + 1];
-      if (completedStep) hooks?.onStepCompleted?.(completedStep, completedIndex, nextStep);
-    }
-
-    return result;
+    return findToolDefinitionHelper(this.agentContext, toolName);
   }
 
   private recordToolAction(call: ChatCompletionMessageFunctionToolCall, toolName: string, result: ToolResult): void {
@@ -455,14 +258,23 @@ export class Agent {
     this.persistMessage(message, kind);
   }
 
-  private persistCompactionMessages(): void {
-    const [task, summary] = this.agentContext.messages;
+  private persistCompactionMessagesForContext(ctx: AgentContext): void {
+    const [task, summary] = ctx.messages;
     if (!task || !summary) {
       throw new Error("Compaction did not produce a task and summary message");
     }
-
-    this.persistMessage(task, "compaction_task");
-    this.persistMessage(summary, "compaction_summary");
+    insertMessage({
+      ...task,
+      sessionId: this.sessionId,
+      createdAt: Date.now(),
+      kind: "compaction_task",
+    });
+    insertMessage({
+      ...summary,
+      sessionId: this.sessionId,
+      createdAt: Date.now(),
+      kind: "compaction_summary",
+    });
   }
 
   private persistMessage(message: Messages, kind: MessageRecord["kind"]): void {
@@ -475,36 +287,5 @@ export class Agent {
   }
 }
 
-export function hydrateToolMessages(context: AgentContext): Messages[] {
-  const toolMap = new Map((context.tool_actions_taken ?? []).map(action => [action.tool_call_id, action]));
-
-  return context.messages.map(msg => {
-    if (msg.role !== "tool") {
-      return msg;
-    }
-
-    const tool = toolMap.get(msg.tool_call_id ?? "");
-    if (!tool) {
-      throw new Error(`Missing stored tool action for call ${msg.tool_call_id ?? "(unknown)"}`);
-    }
-
-    return { ...msg, content: tool.content };
-  });
-}
-
-export function toLLMRequest(context: AgentContext, isTempReq: boolean = false): LLMRequest {
-  const hydratedMessages = hydrateToolMessages(context);
-  const req: LLMRequest = { messages: hydratedMessages };
-
-  if (context.system_prompt) {
-    req.systemPrompt = buildRequestSystemPrompt(context);
-  }
-
-  if (isTempReq) return req;
-  const availableTools = context.available_tools;
-  if (availableTools && availableTools.length > 0) {
-    req.tools = availableTools.map(toWireTool);
-  }
-
-  return req;
-}
+export { hydrateToolMessages } from "./context/hydrate.js";
+export { toLLMRequest } from "./context/llm_request.js";
