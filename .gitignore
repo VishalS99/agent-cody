@@ -3,3 +3,8 @@
 !.env.example
 node_modules/
 build/
+*.sqlite
+*.sqlite3
+*.db
+cody_db.sqlite
+db.sqlite

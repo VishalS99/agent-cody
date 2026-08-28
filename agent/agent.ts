@@ -29,12 +29,14 @@ export class Agent {
   private model: string;
   private toolRoundCount: number = 0;
   private emptyContinuationCount = 0;
+  private sessionId: string;
 
-  constructor(client: ILLMClient, context: AgentContext, stats: SessionStats) {
+  constructor(client: ILLMClient, context: AgentContext, stats: SessionStats, sessionId: string) {
     this.client = client;
     this.agentContext = context;
     this.stats = stats;
     this.model = this.client.getModel();
+    this.sessionId = sessionId;
   }
 
   async turn(prompt: string, hooks?: TurnHooks): Promise<TurnSummary> {
@@ -51,6 +53,7 @@ export class Agent {
       const toolCalls: ChatCompletionMessageFunctionToolCall[] = [];
       let finishReason: ChatCompletionChunk.Choice["finish_reason"] | undefined;
       let usage: ChatCompletionChunk["usage"] | undefined;
+
       try {
         const stream = await this.client.sendSRequest(toLLMRequest(this.agentContext));
         for await (const chunk of stream) {
@@ -194,6 +197,10 @@ export class Agent {
 
   getAgentContext(): AgentContext {
     return this.agentContext;
+  }
+
+  getSessionId(): string {
+    return this.sessionId;
   }
 
   private async runOptionalCompaction(hooks?: TurnHooks): Promise<void> {
@@ -344,6 +351,7 @@ export class Agent {
         isError: true,
       };
     }
+
     const completedIndex =
       result.contextUpdate?.type === "update_state" ? result.contextUpdate.step_completed : undefined;
     if (!result.isError && result.contextUpdate) {

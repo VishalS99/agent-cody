@@ -1,9 +1,7 @@
 import { stdin as input, stdout as output } from "node:process";
 import * as readline from "node:readline/promises";
-import { config } from "../config/env.js";
 import { logger, logLedger, visualLines, writeLedgerLine } from "../config/logger.js";
-import { LLMClient } from "../llm/client.js";
-import { Agent } from "./agent.js";
+import type { Agent } from "./agent.js";
 import {
   ANSI_BOLD_YELLOW,
   ANSI_DIM_GREY,
@@ -21,48 +19,8 @@ import {
   SERVICE_UNAVAILABLE_STATUS,
   TOOLS_CALLED_ANNOTATION,
 } from "./constants.js";
-import { buildSystemPrompt } from "./prompt/prompt.js";
-import { createSessionStats } from "./stats.js";
-import { bashExecToolDefinition } from "./tools/bash_exec.js";
-import { goalsToolDefinition } from "./tools/context/goals.js";
-import { stateToolDefinition } from "./tools/context/state.js";
-import { editFileToolDefinition } from "./tools/edit_file.js";
-import { fileToolDefinition } from "./tools/file.js";
-import { allowedRoot } from "./tools/fs_guard.js";
-import { grepToolDefinition } from "./tools/grep.js";
-import { lsToolDefinition } from "./tools/ls.js";
-import { readFileToolDefinition } from "./tools/read_file.js";
-import type { AgentContext } from "./types.js";
 
-async function buildAgentContext(): Promise<AgentContext> {
-  const root = await allowedRoot();
-
-  const context: AgentContext = {
-    system_prompt: buildSystemPrompt(root),
-    messages: [],
-    available_tools: [
-      lsToolDefinition,
-      readFileToolDefinition,
-      grepToolDefinition,
-      editFileToolDefinition,
-      fileToolDefinition,
-      bashExecToolDefinition,
-      goalsToolDefinition,
-      stateToolDefinition,
-    ],
-    tool_actions_taken: [],
-  };
-
-  // goals, action steps, state are initialized when a task is assigned and the agent calls
-  // tools to initialize them
-  return context;
-}
-
-export async function runLoop(): Promise<void> {
-  const context = await buildAgentContext();
-  const client = new LLMClient("openai-completions", config);
-  const agent = new Agent(client, context, createSessionStats());
-
+export async function runLoop(agent: Agent): Promise<void> {
   const rl = readline.createInterface({ input, output });
 
   while (true) {
