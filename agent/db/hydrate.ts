@@ -4,7 +4,7 @@ import { createSessionStats } from "../stats.js";
 import type { SessionStats } from "../stats.js";
 import { logger } from "../../config/logger.js";
 import { allowedRoot } from "../tools/fs_guard.js";
-import { buildSystemPrompt } from "../prompt/prompt.js";
+import { buildSystemPrompt } from "../prompt/system.js";
 import { getToolDefinitionByName } from "../tools/discover.js";
 import { selectSession } from "./session.js";
 import type { SessionRecord } from "./session.js";

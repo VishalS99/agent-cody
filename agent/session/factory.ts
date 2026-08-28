@@ -2,7 +2,7 @@ import { config } from "../../config/env.js";
 import { LLMClient } from "../../llm/client.js";
 import { Agent } from "../agent.js";
 import { buildAgentContextFromSessionId, initializeDatabase, insertSession } from "../db.js";
-import { buildSystemPrompt } from "../prompt/prompt.js";
+import { buildSystemPrompt } from "../prompt/system.js";
 import { createSessionStats } from "../stats.js";
 import { allToolDefinitions } from "../tools/discover.js";
 import { allowedRoot } from "../tools/fs_guard.js";

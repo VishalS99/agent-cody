@@ -1,4 +1,4 @@
-import { buildRequestSystemPrompt } from "../prompt/prompt.js";
+import { buildRequestSystemPrompt } from "../prompt/context.js";
 import type { AgentContext } from "../types.js";
 
 export function estimateContextTokens(context: AgentContext): number {

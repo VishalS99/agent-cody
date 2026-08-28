@@ -1,5 +1,5 @@
 import type { LLMRequest } from "../../llm/types.js";
-import { buildRequestSystemPrompt } from "../prompt/prompt.js";
+import { buildRequestSystemPrompt } from "../prompt/context.js";
 import type { AgentContext } from "../types.js";
 import { toWireTool } from "../util.js";
 import { hydrateToolMessages } from "./hydrate.js";
