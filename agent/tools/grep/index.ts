@@ -2,9 +2,9 @@ import * as fs from "node:fs/promises";
 import * as nodePath from "node:path";
 import * as fastGlob from "fast-glob";
 import * as z from "zod";
-import { logger } from "../../config/logger.js";
-import type { ToolDefinition } from "../types.js";
-import { resolveInsideRoot } from "./fs_guard.js";
+import { logger } from "../../../config/logger.js";
+import type { ToolDefinition } from "../../types.js";
+import { resolveInsideRoot } from "../fs_guard.js";
 
 export const grepSchema = z.object({
   pattern: z.string().describe("Regex pattern to search for"),
@@ -44,7 +44,6 @@ async function* walkFiles(root: string, include?: string): AsyncGenerator<string
 
 async function searchFile(filePath: string, regex: RegExp, contextLines: number): Promise<GrepMatch[]> {
   const content = await fs.readFile(filePath, "utf-8");
-  // Quick binary check (null byte detection)
   if (content.includes("\0")) return [];
 
   const lines = content.split(/\r?\n/);
@@ -52,7 +51,7 @@ async function searchFile(filePath: string, regex: RegExp, contextLines: number)
   let lineCount = 0;
 
   for (const line of lines) {
-    regex.lastIndex = 0; // Reset state for /g flag safety
+    regex.lastIndex = 0;
     if (regex.test(line)) {
       const start = Math.max(0, lineCount - contextLines);
       const end = Math.min(lines.length, lineCount + contextLines + 1);

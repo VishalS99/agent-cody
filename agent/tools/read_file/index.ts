@@ -2,10 +2,10 @@ import * as fs from "node:fs";
 import * as fsProm from "node:fs/promises";
 import readline from "node:readline";
 import * as z from "zod";
-import { logger } from "../../config/logger.js";
-import type { ToolDefinition, ToolResult } from "../types.js";
-import { resolveInsideRoot } from "./fs_guard.js";
-import { BINARY_SNIFF_BYTES, MAX_BYTES, isBinaryBuffer } from "./io/guard.js";
+import { logger } from "../../../config/logger.js";
+import type { ToolDefinition, ToolResult } from "../../types.js";
+import { resolveInsideRoot } from "../fs_guard.js";
+import { BINARY_SNIFF_BYTES, MAX_BYTES, isBinaryBuffer } from "../io/guard.js";
 
 const MAX_LINES = 1000;
 
@@ -131,7 +131,7 @@ async function readFileFromLineOffset(filePath: string, lineOffset: number, limi
 
   const rl = readline.createInterface({
     input: fileStream,
-    crlfDelay: Infinity, // Handles both Windows (\r\n) and Unix (\n) breaks
+    crlfDelay: Infinity,
   });
 
   let currentLineNo = 0;

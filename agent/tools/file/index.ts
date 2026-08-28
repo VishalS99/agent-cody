@@ -15,9 +15,9 @@
 import * as fsProm from "node:fs/promises";
 import * as nodePath from "node:path";
 import * as z from "zod";
-import type { ToolDefinition, ToolResult } from "../types.js";
-import { errorCode, errorMessage } from "../util.js";
-import { resolveInsideRoot } from "./fs_guard.js";
+import type { ToolDefinition, ToolResult } from "../../types.js";
+import { errorCode, errorMessage } from "../../util.js";
+import { resolveInsideRoot } from "../fs_guard.js";
 
 const MAX_CREATES = 5;
 const MAX_DELETES = 2;
@@ -104,11 +104,6 @@ export const fileToolDefinition: ToolDefinition<typeof fileSchema> = {
         }
         try {
           if (fn === "create") {
-            // Guard the deepest EXISTING ancestor before creating anything:
-            // realpath on it resolves every symlink in the existing chain, so a
-            // parent or grandparent symlink pointing outside the root is caught
-            // BEFORE any directory is created. Everything created below it is
-            // fresh, so no later check can be bypassed.
             const parent = nodePath.dirname(guarded.path);
             const existing = await deepestExistingPath(parent);
             const existingGuard = await resolveInsideRoot(existing);
@@ -143,7 +138,6 @@ export const fileToolDefinition: ToolDefinition<typeof fileSchema> = {
   },
 };
 
-/** Walks up from `path` until it finds a component that exists on disk. */
 async function deepestExistingPath(path: string): Promise<string> {
   let cur = path;
   while (true) {

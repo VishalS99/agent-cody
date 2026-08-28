@@ -1,24 +1,21 @@
 import { stdin as input, stdout as output } from "node:process";
 import * as readline from "node:readline/promises";
-import { logger, logLedger, visualLines, writeLedgerLine } from "../config/logger.js";
+import { logger, logLedger, writeLedgerLine } from "../config/logger.js";
 import type { Agent } from "./agent.js";
 import {
   ANSI_BOLD_YELLOW,
-  ANSI_DIM_GREY,
   ANSI_DIM_WHITE_ITALIC,
   ANSI_ITALIC_GREEN,
   ANSI_RESET,
   CLI_EXIT_COMMAND,
   CLI_INPUT_PROMPT,
-  DEFAULT_SCREEN_ROWS,
   FORCED_COMPACTION_NOTICE,
   RATE_LIMIT_STATUS,
-  HORIZONTAL_SEPARATOR,
   REPLY_PREFIX,
   SCHEDULED_COMPACTION_NOTICE,
   SERVICE_UNAVAILABLE_STATUS,
-  TOOLS_CALLED_ANNOTATION,
 } from "./constants.js";
+import { renderTurnOutput } from "./loop/render.js";
 
 export async function runLoop(agent: Agent): Promise<void> {
   const rl = readline.createInterface({ input, output });
@@ -82,38 +79,7 @@ export async function runLoop(agent: Agent): Promise<void> {
         boundaries.push(logLedger.length);
       }
 
-      if (process.stdout.isTTY && streamed.length > 0) {
-        const blockLogs = logLedger.slice(ledgerStart);
-        const blockLines = blockLogs.reduce((a, e) => a + e.lines, 0);
-        // Every piece after "> " advances the cursor by visualLines - 1:
-        // its trailing "\n" row is shared with the next piece.
-        const up = blockLines + visualLines(streamed) - (blockLogs.length + 1);
-        const screenRows = process.stdout.rows ?? DEFAULT_SCREEN_ROWS;
-        if (up >= 0 && up < screenRows) {
-          process.stdout.write(`\x1b[${up}A\x1b[J`);
-          process.stdout.write(REPLY_PREFIX);
-          for (const entry of blockLogs) process.stdout.write(entry.text);
-          let annotated = "";
-          segments.forEach((seg, i) => {
-            const rendered = Bun.markdown.ansi(seg);
-            annotated += rendered;
-            if (!rendered.endsWith("\n")) annotated += "\n";
-            const hadTools = logLedger.slice(boundaries[i], boundaries[i + 1]).length > 0;
-            if (hadTools) annotated += TOOLS_CALLED_ANNOTATION;
-          });
-          process.stdout.write(annotated);
-          process.stdout.write(
-            `${ANSI_DIM_GREY}${HORIZONTAL_SEPARATOR.repeat(process.stdout.columns ?? 80)}${ANSI_RESET}\n`,
-          );
-        } else {
-          process.stdout.write("\n");
-        }
-      } else {
-        process.stdout.write("\n");
-        process.stdout.write(
-          `${ANSI_DIM_GREY}${HORIZONTAL_SEPARATOR.repeat(process.stdout.columns ?? 80)}${ANSI_RESET}\n`,
-        );
-      }
+      renderTurnOutput(ledgerStart, streamed, segments, boundaries);
     } catch (err) {
       const status = (err as { status?: number } | undefined)?.status;
       const isRateLimit = status === RATE_LIMIT_STATUS || status === SERVICE_UNAVAILABLE_STATUS;
