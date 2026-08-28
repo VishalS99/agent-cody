@@ -10,15 +10,21 @@ async function main(): Promise<void> {
   const { values } = parseArgs({
     args: Bun.argv.slice(2),
     options: {
+      new: { type: "boolean" },
       sessionId: { type: "string" },
     },
     allowPositionals: true,
   });
   const sessionId = values.sessionId;
-  const agent = await createAgent(sessionId);
-  await runLoop(agent);
-  persistSession(agent);
-  process.stdout.write(`${ANSI_WHITE}Session Id: ${ANSI_YELLOW}${agent.getSessionId()}${ANSI_RESET}\n`);
+  try {
+    const agent = await createAgent(sessionId, values.new);
+    await runLoop(agent);
+    persistSession(agent);
+    process.stdout.write(`${ANSI_WHITE}Session Id: ${ANSI_YELLOW}${agent.getSessionId()}${ANSI_RESET}\n`);
+  } catch (error) {
+    console.error(error);
+    process.exitCode = 1;
+  }
 }
 
 main().catch(error => {

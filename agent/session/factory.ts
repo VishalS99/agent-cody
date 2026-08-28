@@ -20,9 +20,13 @@ export async function buildAgentContext(): Promise<AgentContext> {
   return context;
 }
 
-export async function createAgent(oldSessionId: string | undefined): Promise<Agent> {
+export async function createAgent(oldSessionId: string | undefined, isNew: boolean | undefined): Promise<Agent> {
   initializeDatabase();
   const client = new LLMClient("openai-completions", config);
+
+  if (isNew === undefined && oldSessionId === undefined) {
+    throw new Error("Session should already exist or be created new");
+  }
 
   if (oldSessionId) {
     return restoreAgent(oldSessionId, client);
