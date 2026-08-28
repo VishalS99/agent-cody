@@ -17,6 +17,7 @@ A learning-oriented interactive CLI agent harness built with Bun, TypeScript, an
 - Session statistics for tool calls, token usage, and latency
 - Graceful handling of rate-limit (`429`) and service-unavailable (`503`) responses
 - Automatic context compaction within a 1,050,000-token budget
+- SQLite-backed session persistence and transcript replay
 
 ## Requirements
 
@@ -93,9 +94,20 @@ build.ts                Production build script
 ```
 
 The agent layer creates LLM requests, while the LLM layer remains independent of agent implementation details. Tools provide their own Zod parameter schemas and execution functions. `TurnHooks` exposes streaming, tool-call, usage, compaction, and turn-completion events to the CLI.
+### SQLite persistence
 
-### Context compaction
+Session metadata, messages, tool actions, statistics, task state, available tools, and compaction counts are stored in `cody_db.sqlite`. The database is created automatically on startup and is the source of truth for session replay. Tool messages and action results are persisted atomically.
 
+When a session is resumed, the agent restores its transcript and tool definitions. After compaction, replay starts at the latest `compaction_task` boundary and includes the corresponding summary and newer messages.
+
+Inspect the database with SQLite:
+
+```bash
+sqlite3 cody_db.sqlite ".tables"
+sqlite3 cody_db.sqlite "SELECT session_id, last_updated_at, compaction_count FROM sessions;"
+```
+
+Delete `cody_db.sqlite` to intentionally remove local session history; it is recreated on the next run.
 The agent uses a strategy inspired by the [Self-Compact](https://arxiv.org/abs/2510.00609): after tool-call rounds it periodically asks the model whether history should be compressed, while forcing compaction above 80% of the 1,050,000-token budget. The summary preserves the original task and live task context—goals, steps, notes, decisions, and files read—then replaces older transcript messages so work can continue from the current step. Above 90% usage, a shorter summary prompt is used; failed compaction leaves the existing context intact.
 
 ## Development
