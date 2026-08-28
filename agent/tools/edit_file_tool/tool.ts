@@ -23,7 +23,7 @@ import * as fsProm from "node:fs/promises";
 import type { ToolDefinition, ToolResult } from "../../types.js";
 import { resolveInsideRoot } from "../fs_guard.js";
 import { applyOps } from "./apply.js";
-import { atomicWrite, assertFileForEdit } from "./io.js";
+import { assertFileForEdit, atomicWrite } from "./io.js";
 import type { OpsFailure } from "./schema.js";
 import { type EditFileSchema, editFileSchema } from "./schema.js";
 import { validateInterOps, validateOps } from "./validate.js";

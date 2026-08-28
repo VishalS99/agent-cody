@@ -1,26 +1,11 @@
 import * as fs from "node:fs/promises";
 import * as nodePath from "node:path";
-import * as z from "zod";
 import { logger } from "../../../config/logger.js";
 import type { ToolDefinition } from "../../types.js";
 import { allowedRoot, resolveInsideRoot } from "../fs_guard.js";
+import { type LsEntryType, type LsResult, lsSchema } from "./schema.js";
 
 const MAX_ENTRIES = 200;
-
-export const lsSchema = z.object({
-  path: z.string().describe("Directory to list (relative paths resolve against cwd)"),
-  showHidden: z.boolean().default(true).describe("Include hidden (dotfile) entries"),
-});
-
-type lsEntryType = "dir" | "file";
-
-interface LsResult {
-  truncated: boolean;
-  entries: {
-    path: string;
-    type: lsEntryType;
-  }[];
-}
 
 export const lsToolDefinition: ToolDefinition<typeof lsSchema> = {
   type: "function",
@@ -48,7 +33,7 @@ export const lsToolDefinition: ToolDefinition<typeof lsSchema> = {
           .filter(ele => (showHidden ? true : !ele.name.startsWith(".")))
           .map(ele => ({
             path: nodePath.relative(root, nodePath.join(target, ele.name)),
-            type: (ele.isDirectory() ? "dir" : "file") as lsEntryType,
+            type: (ele.isDirectory() ? "dir" : "file") as LsEntryType,
           }));
 
         const truncated = result.length > MAX_ENTRIES;
