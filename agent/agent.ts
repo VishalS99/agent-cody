@@ -3,6 +3,7 @@ import { logger } from "../config/logger.js";
 import type { ILLMClient } from "../llm/client.js";
 import type { LLMRequest } from "../llm/types.js";
 import type { Messages } from "../schemas/messages.js";
+import { insertMessage, insertToolMessageAndAction, type MessageRecord } from "./db.js";
 import {
   COMPACTION_NEAR_LIMIT_RATIO,
   COMPACTION_TURN_THRESHOLD,
@@ -30,19 +31,21 @@ export class Agent {
   private toolRoundCount: number = 0;
   private emptyContinuationCount = 0;
   private sessionId: string;
+  private compactionCount: number;
 
-  constructor(client: ILLMClient, context: AgentContext, stats: SessionStats, sessionId: string) {
+  constructor(client: ILLMClient, context: AgentContext, stats: SessionStats, sessionId: string, compactionCount = 0) {
     this.client = client;
     this.agentContext = context;
     this.stats = stats;
     this.model = this.client.getModel();
     this.sessionId = sessionId;
+    this.compactionCount = compactionCount;
   }
 
   async turn(prompt: string, hooks?: TurnHooks): Promise<TurnSummary> {
     const startTime = performance.now();
     this.emptyContinuationCount = 0;
-    this.agentContext.messages.push({ role: "user", content: prompt });
+    this.addMessage({ role: "user", content: prompt });
 
     let itr = 0;
     let reply = "";
@@ -120,6 +123,7 @@ export class Agent {
           finish_reason: finishReason,
           tool_calls: toolCalls.length,
           reply_chars: reply.length,
+          compaction_count: this.compactionCount,
         },
         "Model response",
       );
@@ -131,21 +135,25 @@ export class Agent {
           this.emptyContinuationCount < MAX_EMPTY_CONTINUATIONS
         ) {
           this.emptyContinuationCount++;
-          this.agentContext.messages.push({
+          this.addMessage({
             role: "user",
             content: EMPTY_RESPONSE_CONTINUATION_PROMPT,
           });
           logger.warn(
-            { event: "empty_response_continuation", attempt: this.emptyContinuationCount },
+            {
+              event: "empty_response_continuation",
+              attempt: this.emptyContinuationCount,
+              compaction_count: this.compactionCount,
+            },
             "Model returned no content while action steps remain; continuing",
           );
           continue;
         }
-        this.agentContext.messages.push({ role: "assistant", content: reply });
+        this.addMessage({ role: "assistant", content: reply });
         break;
       }
 
-      this.agentContext.messages.push({
+      this.addMessage({
         role: "assistant",
         content: "",
         tool_calls: toolCalls,
@@ -170,6 +178,7 @@ export class Agent {
             name: `${this.findToolDefinition(call.function.name)?.function.emoji ?? ""} ${call.function.name}`,
             arguments: call.function.arguments,
             duration_ms: Math.round(performance.now() - toolStart),
+            compaction_count: this.compactionCount,
           },
           "tool execution",
         );
@@ -180,7 +189,11 @@ export class Agent {
 
       if (itr === MAX_TOOL_ITERATIONS) {
         logger.warn(
-          { event: "tool_loop_cap_reached", iterations: MAX_TOOL_ITERATIONS },
+          {
+            event: "tool_loop_cap_reached",
+            iterations: MAX_TOOL_ITERATIONS,
+            compaction_count: this.compactionCount,
+          },
           "Hit tool-call iteration cap; breaking out",
         );
       }
@@ -203,6 +216,10 @@ export class Agent {
     return this.sessionId;
   }
 
+  getCompactionCount(): number {
+    return this.compactionCount;
+  }
+
   private async runOptionalCompaction(hooks?: TurnHooks): Promise<void> {
     const nearLimit = this.stats.currentContextTokens > COMPACTION_NEAR_LIMIT_RATIO * CONTEXT_BUDGET_TOKENS;
 
@@ -219,16 +236,24 @@ export class Agent {
       );
       if (summaryResult.ok) {
         this.replaceTranscript(summaryResult.content);
+        this.compactionCount++;
         this.toolRoundCount = 0;
         this.stats = recordContextEstimate(this.stats, this.estimateContextTokens(this.agentContext));
         hooks?.onCompactionApplied?.(summaryResult.content, "forced");
         logger.info(
-          { event: "forced_compaction", context_tokens: this.stats.currentContextTokens },
+          {
+            event: "forced_compaction",
+            context_tokens: this.stats.currentContextTokens,
+            compaction_count: this.compactionCount,
+          },
           "Forced context compaction applied",
         );
       } else {
         logger.warn(
-          { event: "forced_compaction_failed", error: summaryResult.error },
+          {
+            event: "forced_compaction_failed",
+            error: summaryResult.error,
+          },
           "Forced context compaction failed",
         );
       }
@@ -243,23 +268,37 @@ export class Agent {
           this.stats = recordInternalUsage(this.stats, res.usage);
         }
         logger.info(
-          { event: "compaction_rubric", status: res.status, ...(res.error ? { error: res.error } : {}) },
+          {
+            event: "compaction_rubric",
+            status: res.status,
+            compaction_count: this.compactionCount,
+            ...(res.error ? { error: res.error } : {}),
+          },
           "Compaction rubric decision",
         );
         if (res.status === "COMPRESS") {
           this.agentContext = res.context;
+          this.persistCompactionMessages();
+          this.compactionCount++;
           this.toolRoundCount = 0;
           this.stats = recordContextEstimate(this.stats, this.estimateContextTokens(this.agentContext));
           const appliedSummary = this.agentContext.messages[this.agentContext.messages.length - 1]?.content ?? "";
           hooks?.onCompactionApplied?.(appliedSummary, "scheduled");
           logger.info(
-            { event: "compaction_applied", context_tokens: this.stats.currentContextTokens },
+            {
+              event: "compaction_applied",
+              context_tokens: this.stats.currentContextTokens,
+              compaction_count: this.compactionCount,
+            },
             "Context compaction applied — history summarized; continuing from the current step",
           );
         }
       } catch (error) {
         logger.warn(
-          { event: "compaction_rubric_error", error: error instanceof Error ? error.message : String(error) },
+          {
+            event: "compaction_rubric_error",
+            error: error instanceof Error ? error.message : String(error),
+          },
           "Compaction rubric errored; continuing with existing context",
         );
       }
@@ -272,12 +311,11 @@ export class Agent {
       this.agentContext.task_request ?? (typeof userMessage?.content === "string" ? userMessage.content : "");
     this.agentContext = {
       ...this.agentContext,
-      messages: [
-        { role: "user", content: taskRequest },
-        { role: "assistant", content: summary },
-      ],
+      messages: [],
       tool_actions_taken: [],
     };
+    this.addMessage({ role: "user", content: taskRequest }, "compaction_task");
+    this.addMessage({ role: "assistant", content: summary }, "compaction_summary");
   }
 
   private estimateContextTokens(context: AgentContext): number {
@@ -394,11 +432,45 @@ export class Agent {
     this.agentContext.tool_actions_taken ||= [];
     this.agentContext.tool_actions_taken.push(action);
 
-    this.agentContext.messages.push({
+    const message: Messages = {
       role: "tool",
       content: "",
       tool_call_id: toolCallId,
       name: toolName,
+    };
+    this.agentContext.messages.push(message);
+    insertToolMessageAndAction(
+      {
+        ...message,
+        sessionId: this.sessionId,
+        createdAt: action.timestamp,
+        kind: "message",
+      },
+      { ...action, sessionId: this.sessionId },
+    );
+  }
+
+  private addMessage(message: Messages, kind: MessageRecord["kind"] = "message"): void {
+    this.agentContext.messages.push(message);
+    this.persistMessage(message, kind);
+  }
+
+  private persistCompactionMessages(): void {
+    const [task, summary] = this.agentContext.messages;
+    if (!task || !summary) {
+      throw new Error("Compaction did not produce a task and summary message");
+    }
+
+    this.persistMessage(task, "compaction_task");
+    this.persistMessage(summary, "compaction_summary");
+  }
+
+  private persistMessage(message: Messages, kind: MessageRecord["kind"]): void {
+    insertMessage({
+      ...message,
+      sessionId: this.sessionId,
+      createdAt: Date.now(),
+      kind,
     });
   }
 }

@@ -97,6 +97,7 @@ export interface ToolActionRecord extends ToolAction {
 export interface AgentContextFromSessionId {
   agentContext: AgentContext | null;
   stats: SessionStats | null;
+  compactionCount: number | null;
   error: string;
 }
 
@@ -271,6 +272,20 @@ export function insertToolAction(action: ToolActionRecord): void {
   );
 }
 
+export function insertToolMessageAndAction(
+  message: Omit<MessageRecord, "msgId">,
+  action: Omit<ToolActionRecord, "messageId">,
+): number {
+  return db.transaction(() => {
+    if (message.sessionId !== action.sessionId) {
+      throw new Error("Message and tool should belong to the same session");
+    }
+    const messageId = insertMessage(message);
+    insertToolAction({ ...action, messageId });
+    return messageId;
+  })();
+}
+
 export function selectToolActions(sessionId: string): ToolActionRecord[] {
   const rows = db
     .prepare(
@@ -298,6 +313,7 @@ export async function buildAgentContextFromSessionId(sessionId: string): Promise
     return {
       agentContext: null,
       stats: null,
+      compactionCount: null,
       error: "Error: sessionId is empty",
     };
   }
@@ -314,6 +330,7 @@ export async function buildAgentContextFromSessionId(sessionId: string): Promise
     return {
       agentContext: null,
       stats: null,
+      compactionCount: null,
       error: "Error: session not found",
     };
   }
@@ -358,6 +375,7 @@ export async function buildAgentContextFromSessionId(sessionId: string): Promise
   return {
     agentContext: agc,
     stats: stats,
+    compactionCount: sess.compactionCount,
     error: "",
   };
 }
