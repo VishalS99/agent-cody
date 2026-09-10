@@ -1,3 +1,5 @@
+import "../config/load_env.js";
+
 export const MAX_TOOL_ITERATIONS = 100;
 export const COMPACTION_TURN_THRESHOLD = Number(process.env.COMPACTION_TURN_THRESHOLD ?? 25);
 export const COMPACTION_NEAR_LIMIT_RATIO = 0.9;

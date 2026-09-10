@@ -5,6 +5,7 @@ export function persistSession(agent: Agent): void {
   const context = agent.getAgentContext();
   updateSession(agent.getSessionId(), {
     lastUpdatedAt: Date.now(),
+    cwd: agent.getCwd(),
     stats: agent.getStats(),
     compactionCount: agent.getCompactionCount(),
     ...(context.goal !== undefined ? { goal: context.goal } : {}),

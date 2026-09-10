@@ -43,7 +43,7 @@ cp .env.example .env
 | `API_KEY` | Yes | API credential for the configured provider | — |
 | `BASE_URL` | No | OpenAI-compatible API base URL | `https://api.openai.com/v1` |
 | `MODEL` | No | Model name sent to the provider | `gpt-5.6-luna` |
-| `REASONING_EFFORT` | No | Reasoning effort supported by the provider | `medium` |
+| `REASONING_EFFORT` | No | Reasoning effort supported by the provider | `none` |
 | `COMPACTION_TURN_THRESHOLD` | No | Number of tool-call rounds between scheduled compaction checks during builds | `25` |
 
 Example:
@@ -52,7 +52,7 @@ Example:
 API_KEY=your-api-key
 BASE_URL=https://api.openai.com/v1
 MODEL=gpt-5.6-luna
-REASONING_EFFORT=medium
+REASONING_EFFORT=none
 COMPACTION_TURN_THRESHOLD=25
 ```
 

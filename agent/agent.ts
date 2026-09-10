@@ -28,14 +28,23 @@ export class Agent {
   private emptyContinuationCount = 0;
   private sessionId: string;
   private compactionCount: number;
+  private cwd: string;
 
-  constructor(client: ILLMClient, context: AgentContext, stats: SessionStats, sessionId: string, compactionCount = 0) {
+  constructor(
+    client: ILLMClient,
+    context: AgentContext,
+    stats: SessionStats,
+    sessionId: string,
+    compactionCount = 0,
+    cwd = "",
+  ) {
     this.client = client;
     this.agentContext = context;
     this.stats = stats;
     this.model = this.client.getModel();
     this.sessionId = sessionId;
     this.compactionCount = compactionCount;
+    this.cwd = cwd;
   }
 
   async turn(prompt: string, hooks?: TurnHooks): Promise<TurnSummary> {
@@ -193,6 +202,10 @@ export class Agent {
 
   getCompactionCount(): number {
     return this.compactionCount;
+  }
+
+  getCwd(): string {
+    return this.cwd;
   }
 
   private async runOptionalCompaction(hooks?: TurnHooks): Promise<void> {
