@@ -17,6 +17,7 @@ export interface AgentContextFromSessionId {
   stats: SessionStats | null;
   compactionCount: number | null;
   error: string;
+  cwd: string;
 }
 
 export async function buildAgentContextFromSessionId(sessionId: string): Promise<AgentContextFromSessionId> {
@@ -26,6 +27,7 @@ export async function buildAgentContextFromSessionId(sessionId: string): Promise
       stats: null,
       compactionCount: null,
       error: "Error: sessionId is empty",
+      cwd: "",
     };
   }
 
@@ -35,6 +37,7 @@ export async function buildAgentContextFromSessionId(sessionId: string): Promise
     system_prompt: buildSystemPrompt(root),
     messages: [],
   };
+
   const sess: SessionRecord | null = selectSession(sessionId);
 
   if (sess == null) {
@@ -43,6 +46,7 @@ export async function buildAgentContextFromSessionId(sessionId: string): Promise
       stats: null,
       compactionCount: null,
       error: "Error: session not found",
+      cwd: "",
     };
   }
 
@@ -88,6 +92,7 @@ export async function buildAgentContextFromSessionId(sessionId: string): Promise
     stats: stats,
     compactionCount: sess.compactionCount,
     error: "",
+    cwd: sess.cwd ?? "",
   };
 }
 

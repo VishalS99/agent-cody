@@ -16,7 +16,8 @@ export function initializeDatabase(): void {
       compaction_count INTEGER NOT NULL DEFAULT 0 CHECK (compaction_count >= 0),
       curr_version INTEGER NOT NULL DEFAULT 1,
       available_tools TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(available_tools)),
-      state TEXT NOT NULL DEFAULT '{"notes":[],"decisions":[],"current_step":0,"files_read":[]}' CHECK (json_valid(state))
+      state TEXT NOT NULL DEFAULT '{"notes":[],"decisions":[],"current_step":0,"files_read":[]}' CHECK (json_valid(state)),
+      cwd TEXT NOT NULL DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS messages (
@@ -54,5 +55,10 @@ export function initializeDatabase(): void {
 
     CREATE INDEX IF NOT EXISTS tool_actions_session_message_id_idx
       ON tool_actions (session_id, message_id);
-  `);
+    `);
+
+  const columns = db.query("PRAGMA table_info(sessions)").all() as Array<{ name: string }>;
+  if (!columns.some(column => column.name === "cwd")) {
+    db.run("ALTER TABLE sessions ADD COLUMN cwd TEXT NOT NULL DEFAULT ''");
+  }
 }
