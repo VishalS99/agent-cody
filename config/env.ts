@@ -1,3 +1,4 @@
+import "./load_env.js";
 import type { OpenAICompatConfig } from "../llm/types.js";
 import { ConfigSchema } from "../llm/types.js";
 
