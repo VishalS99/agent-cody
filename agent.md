@@ -2,6 +2,12 @@
 
 This document contains instructions, coding standards, and architectural patterns for developing in this codebase. Any agent or developer working on this project must follow these rules to maintain consistency, safety, and high-quality telemetry.
 
+## Web Research
+
+- Every web-search request may use the web-search tool directly, whether standalone or part of a coding/workspace task; it never requires creating or updating separate goals or steps.
+- When answering from web searches, include the relevant source URLs, especially the URLs supporting key claims.
+- This exemption applies only to the web-search call itself. Workspace inspection, code review, planning, implementation, file edits, tests, and other workspace actions still require the normal goal/step workflow.
+
 ---
 
 ## 1. Environment & Runtime Rules
