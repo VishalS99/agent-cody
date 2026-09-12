@@ -7,7 +7,7 @@ import {
   ANSI_DIM_WHITE_ITALIC,
   ANSI_ITALIC_GREEN,
   ANSI_RESET,
-  CLI_EXIT_COMMAND,
+  CLI_EXIT_COMMANDS,
   CLI_INPUT_PROMPT,
   FORCED_COMPACTION_NOTICE,
   RATE_LIMIT_STATUS,
@@ -16,28 +16,43 @@ import {
   SERVICE_UNAVAILABLE_STATUS,
 } from "./constants.js";
 import { renderTurnOutput } from "./loop/render.js";
+import { InterruptController } from "./loop/interrupt.js";
+import { errorMessage } from "./util.js";
+
+function exitLoop(rl: readline.Interface, interrupts: InterruptController, agent: Agent): void {
+  interrupts.detach();
+  logger.info(
+    {
+      event: "runLoop_exit",
+      stats: agent.getStats(),
+      compaction_count: agent.getCompactionCount(),
+    },
+    "Bye!",
+  );
+  rl.close();
+}
 
 export async function runLoop(agent: Agent): Promise<void> {
-  const rl = readline.createInterface({ input, output });
+  const rl = readline.createInterface({ input, output, prompt: CLI_INPUT_PROMPT });
+  const interrupts = new InterruptController(rl, () => exitLoop(rl, interrupts, agent));
+  interrupts.attach();
 
   while (true) {
+    const ticket = interrupts.beginQuestion();
     let answer: string;
     try {
-      answer = await rl.question(CLI_INPUT_PROMPT);
-    } catch {
-      rl.close();
+      answer = await rl.question(ticket.query, { signal: ticket.signal });
+    } catch (err) {
+      if (interrupts.shouldReprompt(err)) {
+        continue;
+      }
+      exitLoop(rl, interrupts, agent);
       return;
     }
-    if (answer.trim() === "" || answer.trim() === CLI_EXIT_COMMAND) {
-      logger.info(
-        {
-          event: "runLoop_exit",
-          stats: agent.getStats(),
-          compaction_count: agent.getCompactionCount(),
-        },
-        "Bye!",
-      );
-      rl.close();
+    interrupts.endQuestion();
+
+    if (answer.trim() === "" || CLI_EXIT_COMMANDS.has(answer.trim().toLowerCase())) {
+      exitLoop(rl, interrupts, agent);
       return;
     }
 
@@ -86,7 +101,7 @@ export async function runLoop(agent: Agent): Promise<void> {
       if (isRateLimit) {
         process.stdout.write("\n[Rate limit hit — try again in a moment]\n");
       } else {
-        process.stdout.write(`\n[LLM error: ${(err as Error).message}]\n`);
+        process.stdout.write(`\n[LLM error: ${errorMessage(err)}]\n`);
       }
     }
   }
