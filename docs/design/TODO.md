@@ -5,7 +5,7 @@
 - [X] editFile — modify files in-place (line-level edits)
 - [ ] filediff — show diffs between file versions (visual, for user)
 - [X] bash — shell command execution
-- [ ] websearch — search the web
+- [X] websearch — search the web
 - [ ] webfetch — fetch content from URLs
 - [X] editFile: edit validation — detect file-hash change between read and edit time (snapshot tag mismatch) and cancel the edit
 
@@ -25,5 +25,6 @@
 
 ## Pending
 
-- [ ] Update README to reflect the current project structure and tooling
+- [X] Update README to reflect the current project structure and tooling
 - [ ] Optionally remove remaining `agent/db.ts` shim — route consumers directly to `db/index.js`
+- [ ] Propagate an `AbortController` through active agent turns and provider requests so the first Ctrl+C can cancel an in-progress turn; keep the second Ctrl+C for exiting.

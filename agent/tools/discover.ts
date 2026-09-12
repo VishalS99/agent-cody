@@ -6,6 +6,7 @@ import { fileToolDefinition } from "./file_tool/tool.js";
 import { grepToolDefinition } from "./grep_tool/tool.js";
 import { lsToolDefinition } from "./ls_tool/tool.js";
 import { readFileToolDefinition } from "./read_file_tool/tool.js";
+import { webSearchToolDefinition } from "./websearch/tools.js";
 
 // tool definition discovery
 export const allToolDefinitions = [
@@ -17,6 +18,7 @@ export const allToolDefinitions = [
   stateToolDefinition,
   goalsToolDefinition,
   editFileToolDefinition,
+  webSearchToolDefinition,
 ];
 
 export function getToolDefinitionByName(name: string) {
